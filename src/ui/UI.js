@@ -108,6 +108,12 @@ export class UI {
       <!-- SCREAMER (cara a pantalla completa) -->
       <div id="screamer" class="hidden"><canvas id="screamer-canvas" width="512" height="512"></canvas></div>
 
+      <!-- OVERLAY al esconderse (negro con rendijas) -->
+      <div id="hide-overlay" class="hidden"></div>
+
+      <!-- Indicador sutil de presencia / deteccion -->
+      <div id="stalker-cue"></div>
+
       <!-- FUNDIDO A NEGRO -->
       <div class="fade-black" id="fade-black"></div>
     `;
@@ -136,7 +142,9 @@ export class UI {
       btnAudio: this.q('#btn-audio'),
       btnAudio2: this.q('#btn-audio2'),
       screamer: this.q('#screamer'),
-      screamerCanvas: this.q('#screamer-canvas')
+      screamerCanvas: this.q('#screamer-canvas'),
+      hideOverlay: this.q('#hide-overlay'),
+      stalkerCue: this.q('#stalker-cue')
     };
 
     // listeners de menu
@@ -289,5 +297,19 @@ export class UI {
     el.style.animation = '';
     clearTimeout(this._screamerTimer);
     this._screamerTimer = setTimeout(() => el.classList.add('hidden'), ms);
+  }
+
+  // ---- Escondite (overlay con rendijas) ----
+  showHide(on) {
+    this.el.hideOverlay.classList.toggle('hidden', !on);
+  }
+
+  // ---- Indicador de presencia: 0 nada, 1 sospecha, 2 te ve ----
+  setStalkerCue(level) {
+    const el = this.el.stalkerCue;
+    if (level <= 0) { el.classList.remove('show', 'danger'); return; }
+    el.classList.add('show');
+    if (level >= 2) { el.textContent = '▲ TE VE'; el.classList.add('danger'); }
+    else { el.textContent = '▲ presencia'; el.classList.remove('danger'); }
   }
 }

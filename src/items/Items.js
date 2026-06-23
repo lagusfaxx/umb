@@ -79,6 +79,7 @@ export class Items {
     this.panels = [];
     this.notes = [];
     this.radios = [];
+    this.lockers = [];
     this.exit = null;
 
     this.group = new THREE.Group();
@@ -144,8 +145,66 @@ export class Items {
       }
     }
 
+    // ---- Casilleros para esconderse ----
+    this.buildLockers();
+
     // ---- Salida (oculta hasta poder escapar) ----
     this.buildExit();
+  }
+
+  // Coloca casilleros contra las paredes, repartidos por el mapa
+  buildLockers() {
+    const wantedDirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    const candidates = [];
+    for (let gx = 1; gx < this.map.gridW - 1; gx++) {
+      for (let gz = 1; gz < this.map.gridH - 1; gz++) {
+        if (this.map.isSolidGrid(gx, gz)) continue;
+        // celda de piso con exactamente una pared ortogonal (buen rincon)
+        let wall = null, walls = 0;
+        for (const [dx, dz] of wantedDirs) {
+          if (this.map.isSolidGrid(gx + dx, gz + dz)) { walls++; wall = [dx, dz]; }
+        }
+        if (walls === 1) candidates.push({ gx, gz, wall });
+      }
+    }
+    // baraja
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+    const placed = [];
+    for (const c of candidates) {
+      if (this.lockers.length >= CONFIG.hiding.lockerCount) break;
+      const w = this.map.gridToWorld(c.gx, c.gz);
+      // separacion minima entre casilleros
+      if (placed.some(p => Math.hypot(p.x - w.x, p.z - w.z) < 10)) continue;
+      placed.push(w);
+      const [wx, wz] = c.wall;
+      const faceYaw = Math.atan2(wx, wz); // mirar hacia la abertura (lejos de la pared)
+      const mesh = this.makeLockerMesh();
+      mesh.position.set(w.x + wx * 0.15, 0, w.z + wz * 0.15);
+      mesh.rotation.y = Math.atan2(-wx, -wz); // frente del casillero hacia el cuarto
+      this.group.add(mesh);
+      this.lockers.push({ mesh, pos: new THREE.Vector3(w.x, 0, w.z), faceYaw });
+    }
+  }
+
+  makeLockerMesh() {
+    const g = new THREE.Group();
+    const metal = new THREE.MeshStandardMaterial({ color: 0x394038, roughness: 0.6, metalness: 0.4 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 2.0, 0.6), metal);
+    body.position.y = 1.0; g.add(body);
+    // puerta con rejilla (lineas)
+    const doorMat = new THREE.MeshStandardMaterial({ color: 0x2f352e, roughness: 0.7, metalness: 0.3 });
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.74, 1.9, 0.05), doorMat);
+    door.position.set(0, 1.05, 0.3); g.add(door);
+    for (let i = 0; i < 4; i++) {
+      const vent = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.03, 0.06),
+        new THREE.MeshStandardMaterial({ color: 0x14160f }));
+      vent.position.set(0, 1.7 - i * 0.12, 0.32); g.add(vent);
+    }
+    g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    return g;
   }
 
   // ---- Fabricas de meshes ----
@@ -303,6 +362,9 @@ export class Items {
       const wp = new THREE.Vector3(); r.mesh.getWorldPosition(wp);
       consider(wp, { type: 'radio', obj: r }, '[E] Encender radio');
     }
+    for (const l of this.lockers) {
+      consider(l.pos, { type: 'locker', obj: l }, '[E] Esconderse');
+    }
     if (this.exit && this.exit.revealed) {
       consider(this.exit.worldPos, { type: 'exit' }, '[E] SALIR');
     }
@@ -346,6 +408,9 @@ export class Items {
       case 'radio': {
         if (this.audio) this.audio.playRadioInterference(3.0);
         return { type: 'radio' };
+      }
+      case 'locker': {
+        return { type: 'locker', locker: ref.obj };
       }
       case 'exit': {
         return { type: 'exit' };

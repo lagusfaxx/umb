@@ -17,7 +17,6 @@ import { MapGenerator } from '../map/MapGenerator.js';
 import { Player } from '../player/Player.js';
 import { Flashlight } from '../player/Flashlight.js';
 import { Entity } from '../entity/Entity.js';
-import { StillFigures } from '../entity/StillFigures.js';
 import { AudioSystem } from '../audio/AudioSystem.js';
 import { Items } from '../items/Items.js';
 import { HorrorDirector } from '../events/HorrorDirector.js';
@@ -184,22 +183,18 @@ export class Game {
     this.camera.fov = CONFIG.render.fov;
     this.camera.updateProjectionMatrix();
 
-    // entidad principal (acechador)
+    // acechador: aparece lejos y empieza a rondar el nivel
     this.entity = new Entity(this.world, this.map, this.audio, { variant: 'stalker' });
     this.entity.onCatch = () => this.die('caught');
-    this.entity.onManifest = () => { this.vhs.spike(0.4); this.audio.playWhisper(); };
-
-    // segundo mob: el reptante (despierta en la caza final, panel 3)
-    this.crawler = new Entity(this.world, this.map, this.audio, { variant: 'crawler' });
-    this.crawler.onCatch = () => this.die('caught');
-
-    // figuras inmoviles ("no parpadees")
-    this.stillFigures = new StillFigures(this.world, this.map, this.audio);
-    this.stillFigures.build();
-    this.stillFigures.onCatch = (pos) => this.die('figure', pos);
+    this.entity.spawnPatrol(this.map.spawn);
 
     this.prevHuntActive = false;
     this.apparition.visible = false;
+
+    // estado de escondite
+    this.hiding = false;
+    this.hideFails = false;
+    this.hideLocker = null;
 
     // objetos
     this.items = new Items(this.world, this.map, this.state, this.audio);
@@ -285,6 +280,11 @@ export class Game {
   // ENTRADA
   // ------------------------------------------------------------
   onKeyDown(e) {
+    // moverse mientras te escondes = salir del casillero
+    if (this.hiding && !e.repeat &&
+      ['KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+      this.exitHide();
+    }
     switch (e.code) {
       case 'KeyW': case 'ArrowUp': this.keys.forward = true; break;
       case 'KeyS': case 'ArrowDown': this.keys.back = true; break;
@@ -312,9 +312,9 @@ export class Game {
 
   onInteractKey() {
     if (this.phase === PHASE.TAPE) { this.closeViewer(); return; }
-    if (this.phase === PHASE.PLAYING && this.currentInteract) {
-      this.doInteract(this.currentInteract.ref);
-    }
+    if (this.phase !== PHASE.PLAYING) return;
+    if (this.hiding) { this.exitHide(); return; }
+    if (this.currentInteract) this.doInteract(this.currentInteract.ref);
   }
 
   onFlashlightKey() {
@@ -375,10 +375,35 @@ export class Game {
       case 'radio':
         this.ui.subtitle('...interferencia... una voz repite numeros...');
         break;
+      case 'locker':
+        this.enterHide(result.locker);
+        break;
       case 'exit':
         this.win();
         break;
     }
+  }
+
+  // ---- Esconderse en un casillero ----
+  enterHide(locker) {
+    if (this.hiding) return;
+    this.hiding = true;
+    this.hideLocker = locker;
+    // ¿te vio esconderte? (te persigue y te ve de cerca) -> te encontrara igual
+    const p = this.entityPerception(this.entity);
+    this.hideFails = this.entity.isChasing && p.los &&
+      this.entity.distanceToPlayer < CONFIG.hiding.seenCloseDist;
+    // orienta la vista hacia la abertura del casillero
+    this.player.controls.object.rotation.set(0, locker.faceYaw, 0);
+    this.ui.showHide(true);
+    this.ui.subtitle(this.hideFails ? 'te vio entrar...' : 'contienes la respiracion');
+  }
+
+  exitHide() {
+    if (!this.hiding) return;
+    this.hiding = false;
+    this.hideFails = false;
+    this.ui.showHide(false);
   }
 
   handlePanel(id) {
@@ -395,7 +420,6 @@ export class Game {
       this.state.finalHuntStarted = true;
       this.ui.toast('PANEL 3 · LA SALIDA CEDE. ALGO DESPIERTA.');
       this.director.triggerFinalHunt();
-      this.spawnCrawler();
       this.vhs.spike(0.9);
       this.cameraShake(0.4, 0.7);
       this.screamer();
@@ -488,7 +512,7 @@ export class Game {
 
     // audio y postproceso se actualizan siempre (tambien en menus/pausa visual)
     this.audio.update(dt);
-    const hunt = this.entity && this.entity.state === ENTITY_STATE.HUNT ? 1 : 0;
+    const hunt = this.entity && this.entity.isChasing ? 1 : 0;
     this.vhs.update(dt, {
       sanity: this.state.sanity / 100,
       hunt,
@@ -499,10 +523,11 @@ export class Game {
   }
 
   updatePlaying(dt) {
-    // movimiento
-    this.player.update(dt, this.keys);
+    // movimiento (o escondite)
+    if (this.hiding) this.updateHidden(dt);
+    else this.player.update(dt, this.keys);
 
-    // posiciones del jugador (tras moverse)
+    // posiciones del jugador
     this.player.getEyePosition(this._eye);
     this._feet.set(this.player.position.x, 0, this.player.position.z);
     const g = this.map.worldToGrid(this.player.position.x, this.player.position.z);
@@ -511,69 +536,44 @@ export class Game {
     // iluminacion (calcula tambien nearestLitDist)
     this.updateLighting(dt);
 
-    // direccion de la camara y oscuridad
+    // direccion de camara y oscuridad
     this.camera.getWorldDirection(this._camDir);
     const inDarkness = !this.flashlight.on && this.nearestLitDist > 6.5;
 
-    // percepcion de cada criatura
+    // percepcion + actualizacion del acechador
     const mainP = this.entityPerception(this.entity);
-    const crawlerActive = this.crawler && this.crawler.state !== ENTITY_STATE.DORMANT;
-    const crawlerP = crawlerActive ? this.entityPerception(this.crawler) : null;
-    const huntActive = this.entity.state === ENTITY_STATE.HUNT ||
-      (crawlerActive && this.crawler.state === ENTITY_STATE.HUNT);
-
-    // linterna (puede fallar segun actividad paranormal)
-    const paranormal = clamp(
-      (1 - this.state.sanity / 100) * 0.4 + this.director.tension / 100 * 0.35 +
-      (huntActive ? 0.6 : 0) + (this.currentZone === ZONE.CORRUPT ? 0.2 : 0), 0, 1
-    );
-    this.flashlight.update(dt, paranormal);
-
-    // entidad principal
-    const perms = this.director.getEntityPermissions();
     this.entity.update(dt, {
       playerPos: this._feet,
       playerRunning: this.player.isRunning,
-      flashlightPointing: mainP.flPointing,
+      playerCrouching: this.player.isCrouching,
+      flashlightOn: this.flashlight.on,
       losToPlayer: mainP.los,
-      aggression: perms.aggression,
-      allowManifest: perms.allowManifest,
-      allowHunt: perms.allowHunt
+      playerHidden: this.hiding && !this.hideFails,
+      aggression: this.state.aggression
     });
-
-    // reptante (cuando esta activo siempre persigue)
-    if (crawlerActive) {
-      this.crawler.update(dt, {
-        playerPos: this._feet,
-        playerRunning: this.player.isRunning,
-        flashlightPointing: crawlerP.flPointing,
-        losToPlayer: crawlerP.los,
-        aggression: 1,
-        allowManifest: false,
-        allowHunt: true
-      });
-    }
-
-    this.updateThreatAudio(huntActive);
+    const chasing = this.entity.isChasing;
+    this.updateThreatAudio(chasing);
 
     // FOV extra durante la caza
-    if (huntActive) this.player.applyFovToward(CONFIG.render.fovHunt, dt, 3);
+    if (chasing) this.player.applyFovToward(CONFIG.render.fovHunt, dt, 3);
 
-    // figuras inmoviles ("no parpadees")
-    this.stillFigures.update(dt, { eye: this._eye, feet: this._feet, camDir: this._camDir });
+    // linterna (fallos segun actividad)
+    const paranormal = clamp(
+      (1 - this.state.sanity / 100) * 0.35 + this.director.tension / 100 * 0.3 +
+      (chasing ? 0.6 : 0) + (this.currentZone === ZONE.CORRUPT ? 0.2 : 0), 0, 1
+    );
+    this.flashlight.update(dt, paranormal);
 
-    // director del terror
-    const inSafeZone = !inDarkness &&
-      (this.currentZone === ZONE.YELLOW_HALLS || this.currentZone === ZONE.OFFICES || this.currentZone === ZONE.TV_ROOM) &&
-      this.entity.distanceToPlayer > 22 && !huntActive;
+    // director (atmosfera + atrae a la entidad)
+    const inSafeZone = !inDarkness && !chasing && this.entity.distanceToPlayer > 22 &&
+      (this.currentZone === ZONE.YELLOW_HALLS || this.currentZone === ZONE.OFFICES || this.currentZone === ZONE.TV_ROOM);
     this.director.update(dt, {
       playerPos: this._feet,
-      camera: this.camera,
       inDarkness,
       isMoving: this.player.isMoving,
       isRunning: this.player.isRunning,
       zone: this.currentZone,
-      entityState: this.entity.state,
+      chasing,
       entityDist: this.entity.distanceToPlayer,
       inSafeZone
     });
@@ -582,12 +582,16 @@ export class Game {
     this.items.update(dt, this._feet);
     this.map.update(dt);
 
-    // cordura
-    const lookingAtEntity = mainP.looking || (crawlerP && crawlerP.looking);
-    this.updateSanity(dt, { inDarkness, lookingAtEntity });
+    // cordura (no letal: solo atmosfera)
+    this.updateSanity(dt, { inDarkness, lookingAtEntity: mainP.looking });
 
-    // latido cardiaco + ambiente por zona
-    this.updateHeartbeatAndZone(huntActive);
+    // FEEDBACK de peligro: viñeta roja por deteccion/caza + indicador de acechador
+    const danger = Math.max(chasing ? 1 : 0, this.entity.detection * 0.85, (1 - this.state.sanity / 100) * 0.5);
+    this.ui.setSanityVignette(danger);
+    this.ui.setStalkerCue(chasing ? 2 : (this.entity.detection > 0.4 ? 1 : 0));
+
+    // latido + ambiente por zona
+    this.updateHeartbeatAndZone(chasing);
 
     // aparicion temporal
     if (this.apparition.visible) {
@@ -600,30 +604,32 @@ export class Game {
     this.checkEscapeReveal();
     this.checkExitReached();
 
-    // temblor de camara (tras fijar la posicion de la camara)
     this.applyCameraShake(dt);
-
-    // HUD + tiempo
     this.state.elapsed += dt;
     this.updateHUD();
   }
 
+  // Mantiene la camara dentro del casillero mientras te escondes
+  updateHidden(dt) {
+    const l = this.hideLocker;
+    if (!l) return;
+    this.player.position.set(l.pos.x, 0, l.pos.z);
+    this.camera.position.set(l.pos.x, 1.25, l.pos.z);
+    this.audio.setBreath(0.55); // respiracion contenida
+  }
+
   // ------------------------------------------------------------
   // Percepcion de una criatura: linea de vista, mirada y linterna encima
+  // Linea de vista entidad<->jugador y si la estoy mirando (para cordura)
   entityPerception(e) {
-    const out = { los: false, looking: false, flPointing: false };
-    if (e.state === ENTITY_STATE.DORMANT) return out;
+    const out = { los: false, looking: false };
     out.los = this.map.lineOfSight(this._eye.x, this._eye.z, e.position.x, e.position.z);
-    if (out.los) {
+    if (out.los && e.mesh.visible) {
       const h = e.eyeHeight || 1.5;
-      this._tmp.set(e.position.x, h, e.position.z);
-      out.flPointing = this.flashlight.isPointingAt(this._tmp);
-      if (e.mesh.visible) {
-        const to = this._tmp.clone().sub(this._eye);
-        const dist = to.length();
-        to.normalize();
-        if (dist < 36 && this._camDir.dot(to) > 0.55) out.looking = true;
-      }
+      this._tmp.set(e.position.x, h, e.position.z).sub(this._eye);
+      const dist = this._tmp.length();
+      this._tmp.normalize();
+      if (dist < 36 && this._camDir.dot(this._tmp) > 0.55) out.looking = true;
     }
     return out;
   }
@@ -674,7 +680,7 @@ export class Game {
 
     // ambiente y niebla objetivo segun zona
     const look = ZONE_LOOK[this.currentZone] || ZONE_LOOK[ZONE.YELLOW_HALLS];
-    const huntExtra = this.entity.state === ENTITY_STATE.HUNT ? 0.02 : 0;
+    const huntExtra = this.entity.isChasing ? 0.02 : 0;
     this.ambient.intensity += (look.ambient - this.ambient.intensity) * Math.min(1, 2 * dt);
     this.scene.fog.density += (look.fog + huntExtra - this.scene.fog.density) * Math.min(1, 1.5 * dt);
     this._fogColor = this._fogColor || new THREE.Color();
@@ -706,58 +712,40 @@ export class Game {
     this.state.sanity = clamp(this.state.sanity, 0, s.max);
 
     this.audio.setSanity(this.state.sanity / 100);
-    this.ui.setSanityVignette(1 - this.state.sanity / 100);
 
-    // susurros extra y sombras falsas con baja cordura
-    if (this.state.sanity < 35) {
-      if (Math.random() < 0.004) this.audio.playWhisper();
-      if (Math.random() < 0.0015) this.spawnApparition(this._feet);
-    }
-
-    if (this.state.sanity <= 0) this.die('sanity');
+    // con cordura muy baja: susurros (la cordura NO mata; solo atmosfera)
+    if (this.state.sanity < 25 && Math.random() < 0.004) this.audio.playWhisper();
   }
 
   // ------------------------------------------------------------
   // Audio/efectos de amenaza segun el flanco de subida/bajada de la caza
-  updateThreatAudio(huntActive) {
-    if (huntActive && !this.prevHuntActive) {
+  updateThreatAudio(chasing) {
+    if (chasing && !this.prevHuntActive) {
       this.audio.startHunt();
       this.vhs.spike(0.5);
       this.cameraShake(0.25, 0.5);
-      this.ui.subtitle('algo viene por ti');
-    } else if (!huntActive && this.prevHuntActive) {
+      this.ui.subtitle('TE HA VISTO');
+    } else if (!chasing && this.prevHuntActive) {
       this.audio.stopHunt();
     }
-    this.prevHuntActive = huntActive;
+    this.prevHuntActive = chasing;
 
-    if (huntActive) {
-      let nearest = Infinity;
-      if (this.entity.state === ENTITY_STATE.HUNT) nearest = Math.min(nearest, this.entity.distanceToPlayer);
-      if (this.crawler && this.crawler.state === ENTITY_STATE.HUNT) nearest = Math.min(nearest, this.crawler.distanceToPlayer);
-      const prox = clamp(1 - nearest / 20, 0, 1);
+    if (chasing) {
+      const prox = clamp(1 - this.entity.distanceToPlayer / 20, 0, 1);
       this.shakeAmp = Math.max(this.shakeAmp, 0.015 + prox * 0.06);
     }
   }
 
-  // Latido cardiaco segun cercania de amenazas / cordura baja + ambiente de zona
-  updateHeartbeatAndZone(huntActive) {
-    let nearest = Infinity;
-    if (this.entity.state !== ENTITY_STATE.DORMANT) nearest = Math.min(nearest, this.entity.distanceToPlayer);
-    if (this.crawler && this.crawler.state !== ENTITY_STATE.DORMANT) nearest = Math.min(nearest, this.crawler.distanceToPlayer);
-    const prox = clamp(1 - nearest / 16, 0, 1);
-    const lowSan = clamp((40 - this.state.sanity) / 40, 0, 1);
-    this.audio.setHeartbeat(Math.max(prox, lowSan * 0.7, huntActive ? 0.7 : 0));
+  // Latido cardiaco segun cercania del acechador / cordura baja + ambiente de zona
+  updateHeartbeatAndZone(chasing) {
+    const nearest = this.entity.distanceToPlayer;
+    const prox = clamp(1 - nearest / 14, 0, 1);
+    const lowSan = clamp((35 - this.state.sanity) / 35, 0, 1);
+    this.audio.setHeartbeat(Math.max(prox, lowSan * 0.6, chasing ? 0.85 : 0));
     this.audio.setZone(this.currentZone);
   }
 
-  // Despierta al reptante (caza final)
-  spawnCrawler() {
-    if (!this.crawler) return;
-    this.crawler.spawnStalk(this._feet);
-    this.crawler.setState(ENTITY_STATE.HUNT);
-  }
-
-  // Screamer ambiental (cara + grito) durante el juego
+  // Screamer (cara + grito): solo en momentos claros (panel 3)
   screamer() {
     if (this.phase !== PHASE.PLAYING) return;
     this.ui.showScreamer(CONFIG.screamer.durationMs);
@@ -778,6 +766,11 @@ export class Game {
 
   // ------------------------------------------------------------
   updateInteractionPrompt() {
+    if (this.hiding) {
+      this.currentInteract = null;
+      this.ui.showInteract('[E] Salir del casillero');
+      return;
+    }
     const best = this.items.getNearestInteractable(this._feet, this.camera);
     this.currentInteract = best;
     this.ui.showInteract(best ? best.label : null);
@@ -814,28 +807,22 @@ export class Game {
   // ------------------------------------------------------------
   // MUERTE
   // ------------------------------------------------------------
-  die(reason, pos) {
+  die() {
     if (this.phase === PHASE.DEAD || this.phase === PHASE.WON) return;
     this.phase = PHASE.DEAD;
+    this.hiding = false;
     this.audio.stopHunt();
     this.audio.setHeartbeat(0);
-    this.ui.showScreamer(950);   // cara a pantalla completa
+    this.ui.showHide(false);
+    this.ui.showScreamer(950);   // cara del acechador a pantalla completa
     this.audio.playScream();
     this.vhs.spike(1.0);
     this.shakeAmp = 0.5;
     this.appEl.classList.remove('playing');
 
-    // bloquea la camara hacia el causante de la muerte
-    let look = null;
-    if (reason === 'caught') {
-      const e = (this.crawler && this.crawler.state === ENTITY_STATE.HUNT &&
-        this.crawler.distanceToPlayer < this.entity.distanceToPlayer) ? this.crawler : this.entity;
-      e.mesh.visible = true;
-      look = e.position;
-    } else if (reason === 'figure' && pos) {
-      look = pos;
-    }
-    if (look) this.camera.lookAt(look.x, 1.6, look.z);
+    // la camara queda mirando al acechador que te atrapo
+    this.entity.mesh.visible = true;
+    this.camera.lookAt(this.entity.position.x, 1.6, this.entity.position.z);
 
     this._ignoreUnlock = true;
     if (this.player.controls.isLocked) this.player.controls.unlock();

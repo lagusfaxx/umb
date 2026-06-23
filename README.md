@@ -71,7 +71,7 @@ El `dist/` generado por `npm run build` es estático y se puede:
 | **Mouse**             | Mirar                                     |
 | **Shift**             | Correr (consume stamina)                 |
 | **Ctrl** / **C**      | Agacharse                                 |
-| **E**                 | Interactuar (cintas, pilas, paneles, notas) |
+| **E**                 | Interactuar / **esconderse** en casilleros (y salir) |
 | **Click izquierdo**   | Interactuar / re-capturar el mouse       |
 | **F**                 | Encender / apagar linterna               |
 | **R**                 | Revisar el objetivo actual               |
@@ -88,21 +88,25 @@ El `dist/` generado por `npm run build` es estático y se puede:
 - **Linterna** con **batería limitada** que baja con el uso, **parpadeo** al
   estar baja, **fallos** en zonas de alta actividad y durante la caza. Cono de
   luz realista (no ilumina todo). **Pilas escasas** repartidas por el mapa.
-- **Sistema de cordura** (indicador sutil, viñeta roja): baja en oscuridad, al
-  mirar a la entidad, en zonas corruptas, por sustos y por quedarse quieto.
-  Al bajar: aumenta el ruido VHS, distorsión, susurros, sombras falsas y
-  parpadeo. A cero → **muerte psicológica**.
-- **Criaturas (3 amenazas distintas):**
-  - **El Acechador**: figura altísima y demacrada con **rostro pálido** que flota
-    en la oscuridad y tics de cabeza. IA de 3 estados: **Acecho** (sonidos, no se
-    ve) → **Manifestación** (aparece al fondo de un pasillo) → **Caza** (persigue
-    por el laberinto con *pathfinding* BFS). Oye si corres, reacciona a la
-    linterna y puede perder tu rastro.
-  - **Figuras inmóviles** ("no parpadees"): maniquíes pálidos en las zonas
-    oscuras. Se **congelan mientras las miras** y avanzan hacia ti cuando dejas de
-    verlas. Solo te atrapan si las pierdes de vista → screamer + muerte.
-  - **El Reptante**: segundo cazador, más rápido y a ras de suelo, que **despierta
-    en la caza final** (panel 3) para un clímax intenso.
+- **Sistema de cordura** (indicador sutil): baja en oscuridad, al mirar al
+  acechador, en zonas corruptas y por quedarse quieto. Al bajar aumenta el ruido
+  VHS, la distorsión y los susurros. **NO es letal** (es atmosférica): solo el
+  acechador puede matarte, para que ninguna muerte se sienta "de la nada".
+- **El Acechador** — la amenaza principal, **siempre presente y visible**.
+  Figura altísima y demacrada con **rostro pálido** que flota en la oscuridad y
+  tics de cabeza. IA con **vista** (cono + alcance; te ve más lejos si llevas la
+  linterna encendida) y **oído** (si corres), con 3 estados claros:
+  - **PATRULLA**: ronda el nivel con calma (lo verás cruzar pasillos a lo lejos).
+  - **SOSPECHA**: oyó/medio te vio → va a investigar tu último punto conocido.
+  - **CAZA**: te detectó → te persigue (más lento que correr, así que **puedes
+    escapar**) con *pathfinding* BFS.
+  Solo te mata si te **atrapa durante la caza y no estás escondido**. Si rompes
+  su línea de visión te pierde y vuelve a buscar/patrullar. Un indicador sutil
+  (`presencia` / `TE VE`) y la viñeta roja avisan cuándo te está detectando.
+- **Esconderse**: hay **casilleros** repartidos por el mapa. Pulsa **E** para
+  meterte (ves por las rendijas); el acechador no puede detectarte mientras estás
+  dentro. Pero si te ve esconderte de cerca, te encontrará: hazlo cuando hayas
+  roto su línea de visión. Sales con **E** o moviéndote.
 - **Mapa liminal semi-procedural** con laberinto por *backtracker* y **6 zonas**
   (pasillos amarillos, oficinas, sala de TVs, sector inundado, túnel de
   mantenimiento, zona corrupta), colisiones, puertas que se cierran solas y el
@@ -119,15 +123,16 @@ El `dist/` generado por `npm run build` es estático y se puede:
   **crujidos estructurales** y **golpes lejanos**, pasos propios y ajenos,
   respiración, susurros, estática, chirridos, goteo (más en el sector inundado),
   drone de caza, **grito de screamer** y reverb por convolución.
-- **Screamers**: sustos directos con **cara a pantalla completa** + grito +
-  distorsión máxima, dosificados (cooldown) por el Horror Director en tensión
-  alta, en la muerte y al activar el panel 3. Sin abusar.
+- **Screamers**: **cara a pantalla completa** + grito + distorsión máxima en
+  momentos con causa clara: al morir (te muestra al acechador que te atrapó) y al
+  activar el panel 3. Sin sustos aleatorios que maten de la nada.
 - **Postprocesado VHS** (un solo shader): grano, aberración cromática,
   scanlines, distorsión de lente, viñeta, barras de tracking, flicker y color
   lavado amarillento. Reacciona a la cordura y a la caza.
 - **Horror Director**: variable de **tensión 0–100** que sube por oscuridad,
   correr, quietud, progreso y zonas corruptas, y decide dinámicamente sonidos,
-  parpadeos, cierres de puertas, apariciones, manifestación e inicio de caza.
+  parpadeos, cierres de puertas y apariciones. Con tensión alta **atrae al
+  acechador hacia tu zona** para asegurar encuentros y mantener el suspenso.
 - **UI mínima diegética** estilo cámara VHS: batería, objetivo, progreso,
   viñeta de cordura, menú inicial, pausa, visor de cintas, muerte y final.
 - **Dificultad creciente**: más cintas y paneles → entidad más agresiva y mapa
@@ -170,13 +175,12 @@ umbral-09/
     │   ├── Player.js          # Controlador 1ª persona (movimiento/stamina)
     │   └── Flashlight.js      # Linterna (batería, parpadeo, fallos)
     ├── entity/
-    │   ├── Entity.js          # Acechador y reptante (3 estados + BFS + rostro)
-    │   └── StillFigures.js    # Figuras inmóviles ("no parpadees")
+    │   └── Entity.js          # Acechador: vista+oído, PATRULLA/SOSPECHA/CAZA + rostro
     ├── map/
     │   ├── MapGenerator.js    # Mapa liminal, zonas, colisiones, puertas
     │   └── Textures.js        # Texturas procedurales (Canvas 2D)
     ├── items/
-    │   └── Items.js           # Cintas, pilas, paneles, notas, salida
+    │   └── Items.js           # Cintas, pilas, paneles, notas, casilleros, salida
     ├── events/
     │   └── HorrorDirector.js  # Tensión 0–100 y disparo de eventos
     ├── audio/
@@ -192,20 +196,20 @@ umbral-09/
 ## Pruebas realizadas
 
 - ✅ Compila (`npm run build`) y arranca (`npm run dev`) sin errores.
-- ✅ Generación de mapa validada en **40 semillas aleatorias**: spawn siempre
-  sobre piso; cintas, paneles y salida accesibles; **sector inundado
-  inaccesible antes del panel 2 y accesible después**.
-- ✅ Pathfinding BFS de la entidad encuentra rutas correctas.
+- ✅ Generación de mapa validada en **30–40 semillas aleatorias**: spawn sobre
+  piso; cintas/paneles/salida accesibles; **sector inundado bloqueado antes del
+  panel 2 y accesible después**; casilleros suficientes; el acechador aparece
+  lejos y visible.
+- ✅ **IA del acechador (probado en Node)**: te detecta y entra en CAZA cuando te
+  ve, te alcanza estando a la vista (muerte justa), **esconderse rompe la
+  detección y la caza**, y **sin verte no te persigue ni mata** (nada de muertes
+  aleatorias). BFS encuentra rutas correctas.
 - ✅ Conteo de objetivos y lógica de progreso (`GameState`).
-- ✅ Criaturas (acechador, reptante, figuras inmóviles) y rostro procedural se
-  construyen y actualizan sin errores; el Horror Director dispara screamers en
-  tensión alta y la caza final se activa correctamente (probado en Node).
-- ✅ Corregido: los `PointerLockControls` anteriores se liberan al reiniciar
-  (antes quedaban listeners duplicados que multiplicaban la sensibilidad).
 
 Verificación jugable a comprobar en navegador (en PC): inicio, movimiento,
-cámara, recoger cintas/pilas, activar paneles, linterna, persecución, victoria,
-muerte, ausencia de errores en consola.
+cámara, recoger cintas/pilas, activar paneles, linterna, **ver al acechador
+patrullar**, **ser perseguido y escapar**, **esconderse en un casillero**,
+victoria, muerte, ausencia de errores en consola.
 
 ---
 

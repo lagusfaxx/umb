@@ -536,6 +536,54 @@ body {
 }
 
 /* ----------------------------------------------------------
+   Escondite (casillero): negro con rendijas para mirar
+   ---------------------------------------------------------- */
+#hide-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 14;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    #000 0%, #000 43%,
+    rgba(0, 0, 0, 0) 43.5%, rgba(0, 0, 0, 0) 46.5%,
+    #000 47%, #000 53%,
+    rgba(0, 0, 0, 0) 53.5%, rgba(0, 0, 0, 0) 56.5%,
+    #000 57%, #000 100%
+  );
+  box-shadow: inset 0 0 200px 80px rgba(0, 0, 0, 0.95);
+}
+
+#hide-overlay.hidden {
+  display: none;
+}
+
+/* Indicador sutil de presencia / deteccion */
+#stalker-cue {
+  position: absolute;
+  top: 68px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  letter-spacing: 0.24em;
+  color: var(--vhs-amber-dim);
+  opacity: 0;
+  transition: opacity 0.3s;
+  text-shadow: 0 0 6px #000;
+  z-index: 13;
+  pointer-events: none;
+  text-transform: uppercase;
+}
+
+#stalker-cue.show { opacity: 0.8; }
+
+#stalker-cue.danger {
+  color: var(--vhs-red);
+  opacity: 1;
+  animation: rec-blink 0.5s infinite steps(2);
+}
+
+/* ----------------------------------------------------------
    Animaciones
    ---------------------------------------------------------- */
 @keyframes rec-blink {

@@ -47,43 +47,46 @@ export const CONFIG = {
     penumbra: 0.55
   },
 
-  // ---- Cordura ----
+  // ---- Cordura (atmosferica, NO letal: solo afecta visuales/audio) ----
   sanity: {
     max: 100,
     start: 100,
-    darknessDrain: 3.2,      // por seg en oscuridad
-    stareDrain: 7.0,         // por seg mirando a la entidad
-    idleDrain: 1.6,          // por seg quieto demasiado tiempo
-    corruptZoneDrain: 4.5,   // por seg en zona corrupta
-    regen: 1.1,              // por seg en condiciones seguras (con luz, moviendose)
-    idleTimeBeforeDrain: 9,  // seg quieto antes de empezar a drenar
-    loudSoundHit: 6          // golpe instantaneo por susto fuerte
+    darknessDrain: 1.6,      // por seg en oscuridad total
+    stareDrain: 3.0,         // por seg mirando al acechador
+    idleDrain: 0.6,          // por seg quieto demasiado tiempo
+    corruptZoneDrain: 2.0,   // por seg en zona corrupta
+    regen: 2.2,              // por seg en condiciones seguras (con luz, moviendose)
+    idleTimeBeforeDrain: 12  // seg quieto antes de empezar a drenar
   },
 
-  // ---- Entidad ----
+  // ---- Entidad (acechador con vista + oido; patrulla -> sospecha -> caza) ----
   entity: {
-    stalkSpeed: 1.6,
-    huntSpeed: 4.4,          // mas lento que correr (5.0) -> el jugador puede escapar
-    manifestSpeed: 0.0,
-    catchRadius: 1.3,        // distancia a la que atrapa durante la caza
-    hearRunRadius: 26,       // si corres dentro de este radio, te oye
-    flashlightAggroTime: 2.4,// seg apuntandole con la linterna para enfurecerla
-    repathInterval: 0.35,    // recalculo de ruta (BFS) en seg
-    manifestDuration: 2.2,   // cuanto dura visible en estado Manifestacion
-    loseSightTime: 6.0,      // seg sin ver al jugador antes de abandonar la caza
-    spawnMinDistance: 18,    // no aparece mas cerca que esto del jugador
-    crawlerHuntSpeed: 4.85,  // el reptante (caza final) es mas rapido
-    headTwitchChance: 0.02   // probabilidad por frame de tic de cabeza
+    patrolSpeed: 1.5,
+    searchSpeed: 2.4,
+    huntSpeed: 4.3,           // < runSpeed (5.0): puedes escapar corriendo
+    catchRadius: 1.5,         // te alcanza durante la persecucion
+    sightRange: 14,           // alcance de vision base
+    sightRangeLitBonus: 7,    // +alcance si llevas la linterna encendida
+    sightConeDot: 0.30,       // cos del semiangulo de vision (~72 grados)
+    peripheralDist: 3.5,      // a esta distancia te ve aunque no te apunte
+    hearRunRadius: 16,        // te oye si corres dentro de este radio
+    detectionRise: 1.8,       // subida de deteccion mientras te ve (por seg)
+    detectionRiseChase: 3.0,
+    detectionHear: 0.9,
+    detectionFall: 0.6,       // bajada de deteccion sin verte
+    chaseThreshold: 0.85,     // deteccion para iniciar la caza
+    searchThreshold: 0.35,    // deteccion para ir a investigar
+    searchTime: 9,            // seg buscando antes de volver a patrullar
+    loseSightTime: 5.0,       // seg sin verte en caza antes de buscar
+    repathInterval: 0.3,
+    spawnMinDistance: 24,     // aparece lejos al empezar
+    headTwitchChance: 0.02
   },
 
-  // ---- Figuras inmoviles (estilo "no parpadees"): se mueven al no mirarlas ----
-  stillFigures: {
-    count: 7,
-    activateRadius: 24,      // solo cobran vida dentro de este radio
-    moveSpeed: 2.3,          // velocidad cuando no las observas
-    catchRadius: 1.25,       // te alcanza -> screamer + muerte
-    observeDot: 0.42,        // cos del angulo: por encima = "la estas mirando"
-    observeRange: 32         // distancia max a la que mirarla la congela
+  // ---- Esconderse (casilleros) ----
+  hiding: {
+    lockerCount: 16,          // casilleros repartidos por el mapa
+    seenCloseDist: 8          // si te ve esconderte a < esto, te encuentra
   },
 
   // ---- Screamers (sustos directos: cara + sonido). Sin abusar. ----
@@ -135,10 +138,9 @@ export const ZONE = {
 
 // Estados de la entidad
 export const ENTITY_STATE = {
-  DORMANT: 'dormant',
-  STALK: 'stalk',
-  MANIFEST: 'manifest',
-  HUNT: 'hunt'
+  PATROL: 'patrol',   // ronda el mapa con calma
+  SEARCH: 'search',   // oyo/medio vio algo: investiga
+  CHASE: 'chase'      // te detecto: persecucion
 };
 
 // Fases del juego
