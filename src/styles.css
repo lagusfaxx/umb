@@ -1,0 +1,558 @@
+/* ============================================================
+   UMBRAL 09 - Estilos de interfaz
+   Estetica: camara VHS antigua, monoespaciado, minimalista.
+   Solo PC: sin diseno responsive movil, sin botones tactiles.
+   ============================================================ */
+
+:root {
+  --vhs-amber: #d8c98a;
+  --vhs-amber-dim: #8c8154;
+  --vhs-red: #c0392b;
+  --vhs-green: #7fd1a8;
+  --vhs-bg: #050403;
+  --font-mono: "Courier New", "Lucida Console", monospace;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: var(--vhs-amber);
+  font-family: var(--font-mono);
+  cursor: default;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+}
+
+#game-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Oculta el cursor cuando el juego esta capturando el mouse (pointer lock) */
+#app.playing {
+  cursor: none;
+}
+
+#ui-root {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+#ui-root .clickable {
+  pointer-events: auto;
+}
+
+/* ----------------------------------------------------------
+   Capas de pantalla completa (menu, pausa, muerte, final)
+   ---------------------------------------------------------- */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: radial-gradient(ellipse at center, #0c0a06 0%, #000 90%);
+  pointer-events: auto;
+  z-index: 20;
+  overflow: hidden;
+}
+
+.screen.hidden {
+  display: none;
+}
+
+/* Lineas de escaneo y vineta sobre las pantallas */
+.screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.22) 3px,
+    rgba(0, 0, 0, 0.22) 4px
+  );
+  mix-blend-mode: multiply;
+  opacity: 0.6;
+}
+
+.screen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 220px 60px rgba(0, 0, 0, 0.92);
+}
+
+.title {
+  font-size: clamp(48px, 9vw, 150px);
+  letter-spacing: 0.18em;
+  font-weight: bold;
+  color: var(--vhs-amber);
+  text-shadow: 2px 0 var(--vhs-red), -2px 0 #2c6e8c, 0 0 24px rgba(216, 201, 138, 0.25);
+  margin-bottom: 0.2em;
+  animation: title-flicker 6s infinite steps(60);
+}
+
+.subtitle {
+  font-size: clamp(13px, 1.6vw, 20px);
+  color: var(--vhs-amber-dim);
+  letter-spacing: 0.32em;
+  margin-bottom: 2.4em;
+  text-transform: uppercase;
+}
+
+.menu-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65em;
+}
+
+.menu-item {
+  font-size: clamp(16px, 2.2vw, 26px);
+  letter-spacing: 0.22em;
+  color: var(--vhs-amber-dim);
+  cursor: pointer;
+  padding: 0.2em 0.6em;
+  transition: color 0.12s, text-shadow 0.12s;
+  text-transform: uppercase;
+  pointer-events: auto;
+}
+
+.menu-item:hover,
+.menu-item.focus {
+  color: var(--vhs-amber);
+  text-shadow: 1px 0 var(--vhs-red), -1px 0 #2c6e8c;
+}
+
+.menu-item::before {
+  content: "> ";
+  opacity: 0;
+}
+
+.menu-item:hover::before,
+.menu-item.focus::before {
+  opacity: 1;
+}
+
+.screen-note {
+  position: absolute;
+  bottom: 28px;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--vhs-amber-dim);
+  opacity: 0.6;
+  max-width: 80%;
+  line-height: 1.7;
+}
+
+.rec-badge {
+  position: absolute;
+  top: 28px;
+  left: 32px;
+  font-size: 15px;
+  letter-spacing: 0.2em;
+  color: var(--vhs-red);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rec-dot {
+  width: 12px;
+  height: 12px;
+  background: var(--vhs-red);
+  border-radius: 50%;
+  animation: rec-blink 1.3s infinite steps(2);
+}
+
+.timecode {
+  position: absolute;
+  top: 28px;
+  right: 32px;
+  font-size: 15px;
+  letter-spacing: 0.18em;
+  color: var(--vhs-amber);
+  opacity: 0.8;
+}
+
+/* ----------------------------------------------------------
+   HUD en juego (minimo, diegetico)
+   ---------------------------------------------------------- */
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 12;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  color: var(--vhs-amber);
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
+}
+
+#hud.hidden {
+  display: none;
+}
+
+.hud-rec {
+  position: absolute;
+  top: 26px;
+  left: 30px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--vhs-red);
+  opacity: 0.85;
+}
+
+.hud-timecode {
+  position: absolute;
+  top: 26px;
+  right: 30px;
+  opacity: 0.78;
+}
+
+/* Bateria de linterna (esquina inferior izquierda) */
+.hud-battery {
+  position: absolute;
+  bottom: 28px;
+  left: 30px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0.9;
+}
+
+.battery-shell {
+  width: 92px;
+  height: 13px;
+  border: 1px solid var(--vhs-amber-dim);
+  position: relative;
+  padding: 2px;
+}
+
+.battery-shell::after {
+  content: "";
+  position: absolute;
+  right: -4px;
+  top: 3px;
+  width: 3px;
+  height: 5px;
+  background: var(--vhs-amber-dim);
+}
+
+.battery-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--vhs-amber);
+  transition: width 0.25s linear;
+}
+
+.battery-fill.low {
+  background: var(--vhs-red);
+  animation: battery-warn 0.8s infinite steps(2);
+}
+
+.battery-label {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+/* Objetivo y progreso (esquina inferior derecha) */
+.hud-objective {
+  position: absolute;
+  bottom: 28px;
+  right: 30px;
+  text-align: right;
+  max-width: 360px;
+  line-height: 1.6;
+  opacity: 0.9;
+}
+
+.hud-objective .obj-line {
+  font-size: 13px;
+}
+
+.hud-progress {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--vhs-amber-dim);
+  letter-spacing: 0.18em;
+}
+
+/* Aviso emergente de objetivo (al pulsar R o al recoger algo) */
+.hud-toast {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  font-size: 17px;
+  letter-spacing: 0.16em;
+  color: var(--vhs-amber);
+  opacity: 0;
+  max-width: 60%;
+  line-height: 1.7;
+  text-shadow: 1px 0 var(--vhs-red), -1px 0 #2c6e8c;
+  transition: opacity 0.4s;
+}
+
+.hud-toast.show {
+  opacity: 1;
+}
+
+/* Prompt de interaccion ("[E] Recoger cinta") */
+.hud-interact {
+  position: absolute;
+  top: 56%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  color: var(--vhs-amber);
+  opacity: 0;
+  transition: opacity 0.12s;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
+}
+
+.hud-interact.show {
+  opacity: 0.95;
+}
+
+.hud-interact .key {
+  border: 1px solid var(--vhs-amber);
+  padding: 1px 7px;
+  margin-right: 8px;
+  font-weight: bold;
+}
+
+/* Retícula central minima */
+.hud-reticle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: rgba(216, 201, 138, 0.35);
+}
+
+/* Subtitulos diegeticos (susurros, eventos) */
+.hud-subtitle {
+  position: absolute;
+  bottom: 12%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 16px;
+  letter-spacing: 0.1em;
+  color: #b9b29a;
+  font-style: italic;
+  opacity: 0;
+  text-align: center;
+  max-width: 70%;
+  transition: opacity 0.6s;
+  text-shadow: 0 0 8px #000;
+}
+
+.hud-subtitle.show {
+  opacity: 0.85;
+}
+
+/* Indicador de cordura: muy sutil, vineta roja que late en los bordes */
+#sanity-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 11;
+  box-shadow: inset 0 0 0px 0px rgba(40, 0, 0, 0);
+  transition: box-shadow 0.6s;
+}
+
+/* ----------------------------------------------------------
+   Visor de cintas VHS / notas
+   ---------------------------------------------------------- */
+#tape-viewer {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  pointer-events: auto;
+}
+
+#tape-viewer.hidden {
+  display: none;
+}
+
+.tape-frame {
+  width: min(720px, 80vw);
+  padding: 48px 56px;
+  position: relative;
+  background: rgba(8, 7, 4, 0.6);
+}
+
+.tape-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.3) 3px,
+    rgba(0, 0, 0, 0.3) 4px
+  );
+  pointer-events: none;
+}
+
+.tape-header {
+  font-size: 14px;
+  letter-spacing: 0.24em;
+  color: var(--vhs-green);
+  margin-bottom: 1.6em;
+  display: flex;
+  justify-content: space-between;
+  opacity: 0.85;
+}
+
+.tape-body {
+  font-size: clamp(16px, 2vw, 21px);
+  line-height: 1.85;
+  color: var(--vhs-amber);
+  text-shadow: 1px 0 rgba(192, 57, 43, 0.6), -1px 0 rgba(44, 110, 140, 0.6);
+  white-space: pre-wrap;
+  min-height: 5em;
+}
+
+.tape-footer {
+  margin-top: 2em;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  color: var(--vhs-amber-dim);
+  text-align: center;
+  animation: rec-blink 1.4s infinite steps(2);
+}
+
+/* ----------------------------------------------------------
+   Pantalla de muerte
+   ---------------------------------------------------------- */
+#death-screen .death-text {
+  font-size: clamp(20px, 4vw, 44px);
+  letter-spacing: 0.18em;
+  color: var(--vhs-red);
+  text-shadow: 2px 0 #000, 0 0 30px rgba(192, 57, 43, 0.5);
+  animation: death-glitch 0.18s infinite steps(3);
+  margin-bottom: 1.6em;
+}
+
+/* ----------------------------------------------------------
+   Pantalla final
+   ---------------------------------------------------------- */
+#ending-screen .ending-line {
+  font-size: clamp(16px, 2.6vw, 30px);
+  letter-spacing: 0.26em;
+  color: var(--vhs-amber);
+  margin: 0.4em 0;
+  opacity: 0;
+}
+
+.fade-black {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  z-index: 40;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1.2s;
+}
+
+.fade-black.on {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ----------------------------------------------------------
+   Animaciones
+   ---------------------------------------------------------- */
+@keyframes rec-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.15; }
+}
+
+@keyframes battery-warn {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.3; }
+}
+
+@keyframes title-flicker {
+  0%, 96%, 100% { opacity: 1; }
+  97% { opacity: 0.4; }
+  98% { opacity: 1; }
+  99% { opacity: 0.6; }
+}
+
+@keyframes death-glitch {
+  0% { transform: translate(0, 0); }
+  33% { transform: translate(-2px, 1px); }
+  66% { transform: translate(2px, -1px); }
+  100% { transform: translate(0, 0); }
+}
+
+/* Aviso de dispositivo no compatible */
+#device-warning {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px;
+  background: #000;
+  color: var(--vhs-amber);
+  font-size: 18px;
+  letter-spacing: 0.1em;
+  line-height: 1.8;
+}
+
+#device-warning[hidden] {
+  display: none;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--vhs-amber-dim);
+  opacity: 0.7;
+  letter-spacing: 0.16em;
+  margin-top: 0.6em;
+}

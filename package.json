@@ -1,0 +1,18 @@
+{
+  "name": "umbral-09",
+  "version": "1.0.0",
+  "description": "UMBRAL 09 - Terror psicologico liminal en primera persona (Three.js + Vite). Solo PC.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.10"
+  }
+}
