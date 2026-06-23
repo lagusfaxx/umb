@@ -6,6 +6,8 @@
    muerte, pantalla final, subtitulos, avisos y vineta de cordura.
    ============================================================ */
 
+import { drawFace } from '../map/Textures.js';
+
 export class UI {
   constructor(root) {
     this.root = root;
@@ -51,18 +53,15 @@ export class UI {
         <div class="rec-badge"><span class="rec-dot"></span> REC</div>
         <div class="timecode">SP · 00:00:00</div>
         <div class="title">UMBRAL 09</div>
-        <div class="subtitle">registro de mantenimiento — nivel 09</div>
+        <div class="subtitle">nivel 09</div>
         <ul class="menu-list">
           <li class="menu-item clickable" id="btn-start">INICIAR DESCENSO</li>
           <li class="menu-item clickable" id="btn-controls">CONTROLES</li>
           <li class="menu-item clickable" id="btn-audio">AUDIO: ON</li>
         </ul>
         <div class="screen-note" id="controls-note" hidden>
-          WASD moverse · MOUSE mirar · SHIFT correr · CTRL agacharse<br>
-          E interactuar · F linterna · R objetivo · ESC pausa · CLICK puertas
-        </div>
-        <div class="screen-note" style="bottom:64px;">
-          SOLO PC · TECLADO Y MOUSE · USA AURICULARES · PANTALLA COMPLETA RECOMENDADA
+          WASD · MOUSE · SHIFT correr · CTRL agacharse<br>
+          E interactuar · F linterna · R objetivo · ESC pausa
         </div>
       </div>
 
@@ -106,6 +105,9 @@ export class UI {
         <div class="ending-line" id="end3">NIVEL 09 PERMANECE ABIERTO</div>
       </div>
 
+      <!-- SCREAMER (cara a pantalla completa) -->
+      <div id="screamer" class="hidden"><canvas id="screamer-canvas" width="512" height="512"></canvas></div>
+
       <!-- FUNDIDO A NEGRO -->
       <div class="fade-black" id="fade-black"></div>
     `;
@@ -132,7 +134,9 @@ export class UI {
       fade: this.q('#fade-black'),
       controlsNote: this.q('#controls-note'),
       btnAudio: this.q('#btn-audio'),
-      btnAudio2: this.q('#btn-audio2')
+      btnAudio2: this.q('#btn-audio2'),
+      screamer: this.q('#screamer'),
+      screamerCanvas: this.q('#screamer-canvas')
     };
 
     // listeners de menu
@@ -267,5 +271,23 @@ export class UI {
   // ---- Fundido ----
   fadeToBlack(on) {
     this.el.fade.classList.toggle('on', on);
+  }
+
+  // ---- Screamer: cara a pantalla completa con sacudida ----
+  buildScreamerFace() {
+    const c = this.el.screamerCanvas;
+    drawFace(c.getContext('2d'), c.width, 0.7);
+  }
+
+  showScreamer(ms = 600) {
+    this.buildScreamerFace();
+    const el = this.el.screamer;
+    el.classList.remove('hidden');
+    // reinicia la animacion de sacudida
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = '';
+    clearTimeout(this._screamerTimer);
+    this._screamerTimer = setTimeout(() => el.classList.add('hidden'), ms);
   }
 }

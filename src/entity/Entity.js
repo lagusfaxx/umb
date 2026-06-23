@@ -1,91 +1,145 @@
 /* ============================================================
    UMBRAL 09 - Entidad hostil
    ------------------------------------------------------------
-   Presencia que aterra mas por sonido/ausencia que por mostrarse.
-   Tres estados:
-     1. STALK (acecho): invisible/lejana, sonidos, sin verse.
-     2. MANIFEST (manifestacion): aparece breve a distancia.
-     3. HUNT (caza): persigue al jugador por el laberinto (BFS).
-   Reacciona a: correr (oido), linterna apuntada, progreso (agresion).
+   Aterra mas por sonido/ausencia que por mostrarse.
+   Estados: STALK (acecho) -> MANIFEST (manifestacion) -> HUNT (caza).
+   Variantes: 'stalker' (alta, demacrada) y 'crawler' (reptante rapido).
+   El rostro palido (textura procedural) flota en la oscuridad.
    ============================================================ */
 
 import * as THREE from 'three';
 import { CONFIG, ENTITY_STATE } from '../config.js';
+import { getSharedTextures } from '../map/Textures.js';
 
 export class Entity {
-  constructor(scene, map, audio) {
+  constructor(scene, map, audio, opts = {}) {
     this.scene = scene;
     this.map = map;
     this.audio = audio;
+    this.variant = opts.variant || 'stalker';
+    this.huntSpeed = this.variant === 'crawler' ? CONFIG.entity.crawlerHuntSpeed : CONFIG.entity.huntSpeed;
 
     this.state = ENTITY_STATE.DORMANT;
     this.position = new THREE.Vector3(0, 0, 0);
-    this.targetCell = null;     // celda destino actual {gx,gz}
-    this.path = [];             // ruta BFS (lista de celdas)
+    this.targetCell = null;
+    this.path = [];
     this.repathTimer = 0;
     this.stateTimer = 0;
 
-    this.awareness = 0;         // 0..1 cuanto sabe de ti
-    this.flashlightExposure = 0;// tiempo acumulado de linterna encima
-    this.loseSightTimer = 0;    // tiempo sin verte (para abandonar caza)
+    this.awareness = 0;
+    this.flashlightExposure = 0;
+    this.loseSightTimer = 0;
     this.stepTimer = 0;
+    this.twitch = 0;
 
-    this.isVisibleToPlayer = false; // lo fija Game (LOS)
+    this.isVisibleToPlayer = false;
     this.distanceToPlayer = Infinity;
 
-    this.onCatch = null;        // callback cuando atrapa al jugador
-    this.onHuntStart = null;
+    this.onCatch = null;
     this.onManifest = null;
+    this.onHuntStart = null;
 
     this.mesh = this.buildMesh();
     this.mesh.visible = false;
     scene.add(this.mesh);
   }
 
-  // Silueta humanoide alta y oscura (lee como vacio recortado)
   buildMesh() {
+    return this.variant === 'crawler' ? this.buildCrawler() : this.buildStalker();
+  }
+
+  // Material oscuro de cuerpo (lee como silueta/vacio)
+  bodyMat() {
+    return new THREE.MeshStandardMaterial({ color: 0x040406, roughness: 0.55, metalness: 0.0 });
+  }
+
+  // Plano con el rostro palido, emisivo (visible en la oscuridad)
+  makeFace(w = 0.42, h = 0.52) {
+    const tex = getSharedTextures().face;
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x0a0a0a,
+      emissive: 0xffffff,
+      emissiveMap: tex,
+      emissiveIntensity: 0.55,
+      roughness: 1.0
+    });
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+    this.faceMat = mat;
+    return face;
+  }
+
+  // ---- Acechador: alto, delgado, encorvado, brazos larguisimos ----
+  buildStalker() {
     const g = new THREE.Group();
-    const dark = new THREE.MeshStandardMaterial({ color: 0x050507, roughness: 0.4, metalness: 0.0 });
+    const dark = this.bodyMat();
 
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.9, 4, 10), dark);
-    torso.position.y = 1.5; g.add(torso);
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 1.15, 4, 10), dark);
+    torso.position.y = 1.55; torso.rotation.x = 0.12; g.add(torso);
 
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), dark);
-    head.position.y = 2.25; g.add(head);
+    const headGroup = new THREE.Group();
+    headGroup.position.set(0, 2.35, 0.04);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 12), dark);
+    head.scale.set(0.92, 1.15, 0.95);
+    headGroup.add(head);
+    const face = this.makeFace(0.34, 0.46);
+    face.position.set(0, 0.0, 0.18);
+    headGroup.add(face);
+    g.add(headGroup);
+    this.head = headGroup;
 
-    // brazos largos
-    const armGeo = new THREE.CapsuleGeometry(0.08, 1.0, 3, 6);
-    const armL = new THREE.Mesh(armGeo, dark);
-    armL.position.set(-0.34, 1.35, 0); armL.rotation.z = 0.12; g.add(armL);
-    const armR = new THREE.Mesh(armGeo, dark);
-    armR.position.set(0.34, 1.35, 0); armR.rotation.z = -0.12; g.add(armR);
+    // brazos larguisimos casi al suelo
+    const armGeo = new THREE.CapsuleGeometry(0.07, 1.5, 3, 6);
+    const armL = new THREE.Mesh(armGeo, dark); armL.position.set(-0.32, 1.25, 0); armL.rotation.z = 0.1; g.add(armL);
+    const armR = new THREE.Mesh(armGeo, dark); armR.position.set(0.32, 1.25, 0); armR.rotation.z = -0.1; g.add(armR);
 
-    // piernas
-    const legGeo = new THREE.CapsuleGeometry(0.11, 0.9, 3, 6);
-    const legL = new THREE.Mesh(legGeo, dark);
-    legL.position.set(-0.14, 0.55, 0); g.add(legL);
-    const legR = new THREE.Mesh(legGeo, dark);
-    legR.position.set(0.14, 0.55, 0); g.add(legR);
+    const legGeo = new THREE.CapsuleGeometry(0.1, 1.0, 3, 6);
+    const legL = new THREE.Mesh(legGeo, dark); legL.position.set(-0.13, 0.6, 0); g.add(legL);
+    const legR = new THREE.Mesh(legGeo, dark); legR.position.set(0.13, 0.6, 0); g.add(legR);
 
-    // ojos: dos puntos tenues que solo se notan de cerca
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x884444 });
-    const eyeGeo = new THREE.SphereGeometry(0.025, 6, 6);
-    const eyeL = new THREE.Mesh(eyeGeo, eyeMat); eyeL.position.set(-0.07, 2.28, 0.18); g.add(eyeL);
-    const eyeR = new THREE.Mesh(eyeGeo, eyeMat); eyeR.position.set(0.07, 2.28, 0.18); g.add(eyeR);
-    this.eyeMat = eyeMat;
-
-    g.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
+    g.traverse(o => { if (o.isMesh) o.castShadow = true; });
     this.limbs = { armL, armR, legL, legR };
+    this.eyeHeight = 2.0;
     return g;
   }
 
-  // ---- Entrada en juego: comienza acechando lejos del jugador ----
+  // ---- Reptante: bajo, columna horizontal, cabeza adelantada ----
+  buildCrawler() {
+    const g = new THREE.Group();
+    const dark = this.bodyMat();
+
+    const spine = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 1.0, 4, 8), dark);
+    spine.rotation.x = Math.PI / 2;
+    spine.position.set(0, 0.55, 0); g.add(spine);
+
+    const headGroup = new THREE.Group();
+    headGroup.position.set(0, 0.5, 0.7);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), dark);
+    head.scale.set(1.0, 0.8, 1.1);
+    headGroup.add(head);
+    const face = this.makeFace(0.3, 0.34);
+    face.position.set(0, 0.0, 0.16);
+    face.rotation.x = 0.3;
+    headGroup.add(face);
+    g.add(headGroup);
+    this.head = headGroup;
+
+    // 4 extremidades flexionadas
+    const limbGeo = new THREE.CapsuleGeometry(0.06, 0.7, 3, 6);
+    const mk = (x, z) => { const m = new THREE.Mesh(limbGeo, dark); m.position.set(x, 0.4, z); m.rotation.z = x > 0 ? -0.6 : 0.6; g.add(m); return m; };
+    const armL = mk(-0.3, 0.5), armR = mk(0.3, 0.5), legL = mk(-0.3, -0.4), legR = mk(0.3, -0.4);
+
+    g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    this.limbs = { armL, armR, legL, legR };
+    this.eyeHeight = 0.6;
+    return g;
+  }
+
   spawnStalk(playerPos) {
     const cell = this.map.randomFloorCellFar(playerPos, CONFIG.entity.spawnMinDistance);
     if (!cell) return;
     this.position.copy(cell.world);
     this.mesh.position.copy(this.position);
-    this.mesh.visible = false; // acecho: no se muestra
+    this.mesh.visible = false;
     this.setState(ENTITY_STATE.STALK);
     this.awareness = 0.2;
   }
@@ -98,13 +152,11 @@ export class Entity {
       if (this.onManifest) this.onManifest(this.position.clone());
     } else if (s === ENTITY_STATE.HUNT) {
       this.mesh.visible = true;
-      this.path = [];
-      this.repathTimer = 0;
+      this.path = []; this.repathTimer = 0;
       if (this.onHuntStart) this.onHuntStart();
     } else if (s === ENTITY_STATE.STALK) {
       this.mesh.visible = false;
-      this.path = [];
-      this.pickWanderTarget();
+      this.path = []; this.pickWanderTarget();
     } else if (s === ENTITY_STATE.DORMANT) {
       this.mesh.visible = false;
     }
@@ -112,7 +164,6 @@ export class Entity {
 
   cell() { return this.map.worldToGrid(this.position.x, this.position.z); }
 
-  // ---- BFS sobre la rejilla (entidad -> destino), devuelve lista de celdas ----
   bfs(from, to) {
     if (from.gx === to.gx && from.gz === to.gz) return [];
     const W = this.map.gridW, H = this.map.gridH;
@@ -137,7 +188,6 @@ export class Entity {
       }
     }
     if (!found) return [];
-    // reconstruir
     const path = [];
     let ck = key(to.gx, to.gz);
     while (ck !== key(from.gx, from.gz) && ck >= 0) {
@@ -156,53 +206,36 @@ export class Entity {
     }
   }
 
-  // ---- Mover la entidad a lo largo de su ruta a cierta velocidad ----
   followPath(dt, speed) {
     if (!this.path || this.path.length === 0) return false;
     const next = this.path[0];
     const w = this.map.gridToWorld(next.gx, next.gz);
-    const dx = w.x - this.position.x;
-    const dz = w.z - this.position.z;
+    const dx = w.x - this.position.x, dz = w.z - this.position.z;
     const dist = Math.hypot(dx, dz);
-    if (dist < 0.18) {
-      this.path.shift();
-      return this.path.length > 0;
-    }
+    if (dist < 0.18) { this.path.shift(); return this.path.length > 0; }
     const step = speed * dt;
     this.position.x += (dx / dist) * step;
     this.position.z += (dz / dist) * step;
-    // orientacion hacia el movimiento
     this.targetYaw = Math.atan2(dx, dz);
     return true;
   }
 
-  /* ctx = {
-       playerPos: Vector3, playerRunning: bool, flashlightPointing: bool,
-       losToPlayer: bool (hay linea de vision entidad<->jugador),
-       aggression: 0..1, allowManifest: bool, allowHunt: bool
-     } */
   update(dt, ctx) {
     if (this.state === ENTITY_STATE.DORMANT) return;
-
     this.stateTimer += dt;
     this.distanceToPlayer = this.position.distanceTo(ctx.playerPos);
 
-    // ---- Percepcion ----
-    // oye correr cerca
+    // percepcion
     if (ctx.playerRunning && this.distanceToPlayer < CONFIG.entity.hearRunRadius) {
       this.awareness = Math.min(1, this.awareness + dt * 0.5);
     }
-    // linterna encima
     if (ctx.flashlightPointing && ctx.losToPlayer) {
       this.flashlightExposure += dt;
       this.awareness = Math.min(1, this.awareness + dt * 0.4);
     } else {
       this.flashlightExposure = Math.max(0, this.flashlightExposure - dt * 0.5);
     }
-    // decaimiento natural del conocimiento
     this.awareness = Math.max(0, this.awareness - dt * 0.04);
-
-    // mas agresion (progreso) => sube percepcion base
     this.awareness = Math.max(this.awareness, ctx.aggression * 0.35);
 
     switch (this.state) {
@@ -211,62 +244,40 @@ export class Entity {
       case ENTITY_STATE.HUNT: this.updateHunt(dt, ctx); break;
     }
 
-    // ---- Aplicar transform + animacion sutil ----
     this.mesh.position.copy(this.position);
     if (this.targetYaw != null) {
-      // girar suave hacia la direccion de movimiento
       let d = this.targetYaw - this.mesh.rotation.y;
       while (d > Math.PI) d -= Math.PI * 2;
       while (d < -Math.PI) d += Math.PI * 2;
       this.mesh.rotation.y += d * Math.min(1, 8 * dt);
     }
-    this.animateLimbs(dt);
+    this.animate(dt);
   }
 
   updateStalk(dt, ctx) {
-    // deambula
     this.repathTimer -= dt;
     const moving = this.followPath(dt, CONFIG.entity.stalkSpeed);
-    if (!moving && this.repathTimer <= 0) {
-      this.pickWanderTarget();
-      this.repathTimer = 2.0;
-    }
+    if (!moving && this.repathTimer <= 0) { this.pickWanderTarget(); this.repathTimer = 2.0; }
 
-    // pasos lejanos audibles segun proximidad
     this.stepTimer -= dt;
-    if (this.stepTimer <= 0) {
-      this.stepTimer = 0.7;
-      if (this.audio) this.audio.entityStep(this.distanceToPlayer, false);
-    }
+    if (this.stepTimer <= 0) { this.stepTimer = 0.7; if (this.audio) this.audio.entityStep(this.distanceToPlayer, false); }
 
-    // escalado: si esta muy consciente y se permite, manifestarse o cazar
-    if (this.flashlightExposure > CONFIG.entity.flashlightAggroTime && ctx.allowHunt) {
-      this.setState(ENTITY_STATE.HUNT);
-      return;
-    }
-    if (this.awareness >= 1 && ctx.allowHunt) {
-      this.setState(ENTITY_STATE.HUNT);
-      return;
-    }
-    if (this.awareness > 0.6 && ctx.allowManifest && this.distanceToPlayer > 10) {
-      this.tryManifest(ctx);
-    }
+    if (this.flashlightExposure > CONFIG.entity.flashlightAggroTime && ctx.allowHunt) { this.setState(ENTITY_STATE.HUNT); return; }
+    if (this.awareness >= 1 && ctx.allowHunt) { this.setState(ENTITY_STATE.HUNT); return; }
+    if (this.awareness > 0.6 && ctx.allowManifest && this.distanceToPlayer > 10) this.tryManifest(ctx);
   }
 
-  // Reubica la entidad a un punto lejano y visible (fin de pasillo) y se muestra
   tryManifest(ctx) {
     let chosen = null;
     for (let i = 0; i < 12; i++) {
       const cell = this.map.randomFloorCellFar(ctx.playerPos, 12);
       if (!cell) continue;
-      const los = this.map.lineOfSight(ctx.playerPos.x, ctx.playerPos.z, cell.world.x, cell.world.z);
-      if (los) { chosen = cell; break; }
+      if (this.map.lineOfSight(ctx.playerPos.x, ctx.playerPos.z, cell.world.x, cell.world.z)) { chosen = cell; break; }
       if (!chosen) chosen = cell;
     }
     if (chosen) {
       this.position.copy(chosen.world);
       this.mesh.position.copy(this.position);
-      // mira hacia el jugador
       this.targetYaw = Math.atan2(ctx.playerPos.x - this.position.x, ctx.playerPos.z - this.position.z);
       this.mesh.rotation.y = this.targetYaw;
       this.setState(ENTITY_STATE.MANIFEST);
@@ -274,17 +285,11 @@ export class Entity {
   }
 
   updateManifest(dt, ctx) {
-    // permanece quieta, mirando al jugador
     this.targetYaw = Math.atan2(ctx.playerPos.x - this.position.x, ctx.playerPos.z - this.position.z);
-
-    // si la miras con linterna mucho tiempo, o pasa el tiempo y hay agresion -> caza
     const stared = ctx.flashlightPointing && ctx.losToPlayer && this.flashlightExposure > 1.2;
     if (this.stateTimer > CONFIG.entity.manifestDuration) {
-      if ((ctx.allowHunt && (this.awareness > 0.7 || ctx.aggression > 0.4)) || stared) {
-        this.setState(ENTITY_STATE.HUNT);
-      } else {
-        this.setState(ENTITY_STATE.STALK);
-      }
+      if ((ctx.allowHunt && (this.awareness > 0.7 || ctx.aggression > 0.4)) || stared) this.setState(ENTITY_STATE.HUNT);
+      else this.setState(ENTITY_STATE.STALK);
     } else if (stared && ctx.allowHunt) {
       this.setState(ENTITY_STATE.HUNT);
     }
@@ -297,24 +302,14 @@ export class Entity {
       this.path = this.bfs(this.cell(), pc);
       this.repathTimer = CONFIG.entity.repathInterval;
     }
-    // velocidad de caza escala levemente con agresion
-    const speed = CONFIG.entity.huntSpeed * (0.9 + ctx.aggression * 0.25);
+    const speed = this.huntSpeed * (0.9 + ctx.aggression * 0.25);
     this.followPath(dt, speed);
 
-    // pasos de caza (mas frecuentes/cercanos)
     this.stepTimer -= dt;
-    if (this.stepTimer <= 0) {
-      this.stepTimer = 0.34;
-      if (this.audio) this.audio.entityStep(this.distanceToPlayer, true);
-    }
+    if (this.stepTimer <= 0) { this.stepTimer = 0.32; if (this.audio) this.audio.entityStep(this.distanceToPlayer, true); }
 
-    // atrapa al jugador
-    if (this.distanceToPlayer < CONFIG.entity.catchRadius) {
-      if (this.onCatch) this.onCatch();
-      return;
-    }
+    if (this.distanceToPlayer < CONFIG.entity.catchRadius) { if (this.onCatch) this.onCatch(); return; }
 
-    // pierde la pista: si no te ve y estas lejos, abandona
     if (ctx.losToPlayer && this.distanceToPlayer < 18) {
       this.loseSightTimer = 0;
     } else {
@@ -322,29 +317,40 @@ export class Entity {
       if (this.loseSightTimer > CONFIG.entity.loseSightTime) {
         this.loseSightTimer = 0;
         this.awareness = 0.3;
-        // se retira lejos y vuelve a acechar
         const far = this.map.randomFloorCellFar(ctx.playerPos, CONFIG.entity.spawnMinDistance);
-        if (far) { this.position.copy(far.world); }
+        if (far) this.position.copy(far.world);
         this.setState(ENTITY_STATE.STALK);
       }
     }
   }
 
-  animateLimbs(dt) {
+  animate(dt) {
     if (!this.mesh.visible) return;
     const t = performance.now() * 0.004;
     const moving = this.state === ENTITY_STATE.HUNT || this.state === ENTITY_STATE.STALK;
-    const amp = moving ? 0.5 : 0.05;
-    this.limbs.armL.rotation.x = Math.sin(t) * amp;
-    this.limbs.armR.rotation.x = -Math.sin(t) * amp;
-    this.limbs.legL.rotation.x = -Math.sin(t) * amp;
-    this.limbs.legR.rotation.x = Math.sin(t) * amp;
-    // leve flotacion inquietante
-    this.mesh.position.y = Math.sin(t * 0.7) * 0.03;
+    const amp = moving ? (this.variant === 'crawler' ? 0.7 : 0.5) : 0.05;
+    if (this.limbs) {
+      this.limbs.armL.rotation.x = Math.sin(t) * amp;
+      this.limbs.armR.rotation.x = -Math.sin(t) * amp;
+      this.limbs.legL.rotation.x = -Math.sin(t) * amp;
+      this.limbs.legR.rotation.x = Math.sin(t) * amp;
+    }
+    // flotacion inquietante
+    this.mesh.position.y = (this.variant === 'crawler' ? 0 : 1) * Math.sin(t * 0.7) * 0.03;
+
+    // tic de cabeza (snap brusco) — inquietante
+    if (this.head) {
+      if (this.twitch > 0) {
+        this.twitch -= dt;
+        this.head.rotation.z = (Math.random() - 0.5) * 0.5;
+        this.head.rotation.x = (Math.random() - 0.5) * 0.3;
+      } else {
+        this.head.rotation.z *= 0.8;
+        this.head.rotation.x *= 0.8;
+        if (Math.random() < CONFIG.entity.headTwitchChance) this.twitch = 0.12 + Math.random() * 0.12;
+      }
+    }
   }
 
-  retreatDormant() {
-    this.setState(ENTITY_STATE.DORMANT);
-    this.mesh.visible = false;
-  }
+  retreatDormant() { this.setState(ENTITY_STATE.DORMANT); this.mesh.visible = false; }
 }

@@ -23,6 +23,7 @@ export class HorrorDirector {
     this.lastBigEvent = 0;
     this.time = 0;
     this.forcedHunt = false; // caza final (panel 3)
+    this.screamerCooldown = CONFIG.screamer.cooldown;
   }
 
   // Sube tension al cumplir un objetivo
@@ -54,6 +55,7 @@ export class HorrorDirector {
             zone, entityState, entityDist, inSafeZone } */
   update(dt, ctx) {
     this.time += dt;
+    this.screamerCooldown -= dt;
     const d = CONFIG.director;
 
     // ---- Ajuste de tension ----
@@ -110,6 +112,11 @@ export class HorrorDirector {
       else { this.fx.apparition(ctx.playerPos); }
     } else {
       // alto
+      // screamer ambiental (raro, con cooldown) cuando la tension es muy alta
+      if (this.screamerCooldown <= 0 && this.tension > CONFIG.screamer.minTensionAmbient && Math.random() < 0.25) {
+        this.fireScreamer();
+        return;
+      }
       if (r < 0.2) { const p = this.map.breakLightNear(ctx.playerPos); if (p) this.audio.playLightPop(); }
       else if (r < 0.4) { const p = this.map.closeRandomDoorNear(ctx.playerPos); if (p) this.audio.playDoorCreak(); }
       else if (r < 0.58) { this.fx.apparition(ctx.playerPos); this.audio.playWhisper(); }
@@ -129,6 +136,11 @@ export class HorrorDirector {
   flickerLights(pos) {
     // parpadeo breve de luminarias cercanas (lo aplica Game via fx)
     this.fx.flickerNearbyLights(pos, 1.2);
+  }
+
+  fireScreamer() {
+    this.screamerCooldown = CONFIG.screamer.cooldown + Math.random() * 10;
+    if (this.fx.screamer) this.fx.screamer();
   }
 
   randomWhisper() {

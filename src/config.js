@@ -71,7 +71,26 @@ export const CONFIG = {
     repathInterval: 0.35,    // recalculo de ruta (BFS) en seg
     manifestDuration: 2.2,   // cuanto dura visible en estado Manifestacion
     loseSightTime: 6.0,      // seg sin ver al jugador antes de abandonar la caza
-    spawnMinDistance: 18     // no aparece mas cerca que esto del jugador
+    spawnMinDistance: 18,    // no aparece mas cerca que esto del jugador
+    crawlerHuntSpeed: 4.85,  // el reptante (caza final) es mas rapido
+    headTwitchChance: 0.02   // probabilidad por frame de tic de cabeza
+  },
+
+  // ---- Figuras inmoviles (estilo "no parpadees"): se mueven al no mirarlas ----
+  stillFigures: {
+    count: 7,
+    activateRadius: 24,      // solo cobran vida dentro de este radio
+    moveSpeed: 2.3,          // velocidad cuando no las observas
+    catchRadius: 1.25,       // te alcanza -> screamer + muerte
+    observeDot: 0.42,        // cos del angulo: por encima = "la estas mirando"
+    observeRange: 32         // distancia max a la que mirarla la congela
+  },
+
+  // ---- Screamers (sustos directos: cara + sonido). Sin abusar. ----
+  screamer: {
+    cooldown: 26,            // seg minimos entre screamers ambientales
+    durationMs: 600,         // duracion del flash de la cara
+    minTensionAmbient: 80    // tension minima para un screamer ambiental
   },
 
   // ---- Horror Director (tension 0..100) ----

@@ -502,6 +502,40 @@ body {
 }
 
 /* ----------------------------------------------------------
+   Screamer (cara a pantalla completa)
+   ---------------------------------------------------------- */
+#screamer {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  animation: screamer-shake 0.05s infinite;
+}
+
+#screamer.hidden {
+  display: none;
+}
+
+#screamer canvas {
+  width: 78vmin;
+  height: 78vmin;
+  filter: contrast(1.35) brightness(1.12) saturate(0.8);
+}
+
+@keyframes screamer-shake {
+  0% { transform: translate(0, 0) scale(1.02); }
+  20% { transform: translate(-10px, 7px) scale(1.06); }
+  40% { transform: translate(8px, -9px) scale(1.03); }
+  60% { transform: translate(-7px, -5px) scale(1.07); }
+  80% { transform: translate(9px, 6px) scale(1.02); }
+  100% { transform: translate(0, 0) scale(1.05); }
+}
+
+/* ----------------------------------------------------------
    Animaciones
    ---------------------------------------------------------- */
 @keyframes rec-blink {

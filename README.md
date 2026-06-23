@@ -92,10 +92,17 @@ El `dist/` generado por `npm run build` es estático y se puede:
   mirar a la entidad, en zonas corruptas, por sustos y por quedarse quieto.
   Al bajar: aumenta el ruido VHS, distorsión, susurros, sombras falsas y
   parpadeo. A cero → **muerte psicológica**.
-- **Entidad** con IA de 3 estados: **Acecho** (sonidos, no se ve) →
-  **Manifestación** (aparece breve al fondo de un pasillo) → **Caza**
-  (persigue por el laberinto con *pathfinding* BFS). Oye si corres, reacciona a
-  la linterna, puede perder tu rastro y desaparecer. Si te alcanza → jumpscare.
+- **Criaturas (3 amenazas distintas):**
+  - **El Acechador**: figura altísima y demacrada con **rostro pálido** que flota
+    en la oscuridad y tics de cabeza. IA de 3 estados: **Acecho** (sonidos, no se
+    ve) → **Manifestación** (aparece al fondo de un pasillo) → **Caza** (persigue
+    por el laberinto con *pathfinding* BFS). Oye si corres, reacciona a la
+    linterna y puede perder tu rastro.
+  - **Figuras inmóviles** ("no parpadees"): maniquíes pálidos en las zonas
+    oscuras. Se **congelan mientras las miras** y avanzan hacia ti cuando dejas de
+    verlas. Solo te atrapan si las pierdes de vista → screamer + muerte.
+  - **El Reptante**: segundo cazador, más rápido y a ras de suelo, que **despierta
+    en la caza final** (panel 3) para un clímax intenso.
 - **Mapa liminal semi-procedural** con laberinto por *backtracker* y **6 zonas**
   (pasillos amarillos, oficinas, sala de TVs, sector inundado, túnel de
   mantenimiento, zona corrupta), colisiones, puertas que se cierran solas y el
@@ -107,9 +114,14 @@ El `dist/` generado por `npm run build` es estático y se puede:
   - Con las 6 cintas + 3 paneles aparece la **ruta de escape**.
 - **Interacciones**: abrir/recoger, leer notas, activar paneles, encender TVs
   (evento), radio con interferencias.
-- **Audio 100% procedural (Web Audio)**: zumbido fluorescente, pasos propios y
-  ajenos, respiración, golpes, metales lejanos, susurros, estática, chirridos,
-  goteo, drone de caza grave, jumpscare seco y reverb por convolución.
+- **Audio 100% procedural (Web Audio)**: zumbido fluorescente, **drone grave de
+  fondo**, **latido cardíaco** que sube con la cercanía y la cordura baja,
+  **crujidos estructurales** y **golpes lejanos**, pasos propios y ajenos,
+  respiración, susurros, estática, chirridos, goteo (más en el sector inundado),
+  drone de caza, **grito de screamer** y reverb por convolución.
+- **Screamers**: sustos directos con **cara a pantalla completa** + grito +
+  distorsión máxima, dosificados (cooldown) por el Horror Director en tensión
+  alta, en la muerte y al activar el panel 3. Sin abusar.
 - **Postprocesado VHS** (un solo shader): grano, aberración cromática,
   scanlines, distorsión de lente, viñeta, barras de tracking, flicker y color
   lavado amarillento. Reacciona a la cordura y a la caza.
@@ -158,7 +170,8 @@ umbral-09/
     │   ├── Player.js          # Controlador 1ª persona (movimiento/stamina)
     │   └── Flashlight.js      # Linterna (batería, parpadeo, fallos)
     ├── entity/
-    │   └── Entity.js          # IA de la entidad (3 estados + BFS)
+    │   ├── Entity.js          # Acechador y reptante (3 estados + BFS + rostro)
+    │   └── StillFigures.js    # Figuras inmóviles ("no parpadees")
     ├── map/
     │   ├── MapGenerator.js    # Mapa liminal, zonas, colisiones, puertas
     │   └── Textures.js        # Texturas procedurales (Canvas 2D)
@@ -184,6 +197,11 @@ umbral-09/
   inaccesible antes del panel 2 y accesible después**.
 - ✅ Pathfinding BFS de la entidad encuentra rutas correctas.
 - ✅ Conteo de objetivos y lógica de progreso (`GameState`).
+- ✅ Criaturas (acechador, reptante, figuras inmóviles) y rostro procedural se
+  construyen y actualizan sin errores; el Horror Director dispara screamers en
+  tensión alta y la caza final se activa correctamente (probado en Node).
+- ✅ Corregido: los `PointerLockControls` anteriores se liberan al reiniciar
+  (antes quedaban listeners duplicados que multiplicaban la sensibilidad).
 
 Verificación jugable a comprobar en navegador (en PC): inicio, movimiento,
 cámara, recoger cintas/pilas, activar paneles, linterna, persecución, victoria,
@@ -208,7 +226,6 @@ extremo. Posibles mejoras futuras:
   amplía mucho el mapa.
 - **Guardado de progreso** y **ajustes** (volumen, sensibilidad, calidad) en un
   menú de opciones.
-- **Más variedad de jumpscares y manifestaciones** y animaciones de la entidad.
 - Empaquetado de escritorio con Tauri/Electron para distribuir un ejecutable.
 
 Casi todo el balance (velocidades, drenajes, tensión, distancias de la entidad,

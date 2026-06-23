@@ -124,6 +124,17 @@ export class AudioSystem {
     this.airSrc = air;
 
     this.startBreath();
+    this.startDrone();
+    this.startHeartbeat();
+
+    // temporizadores de eventos ambientales (rellenan los silencios)
+    this.ambientTimers = {
+      groan: 5 + Math.random() * 8,
+      boom: 14 + Math.random() * 12,
+      voice: 16 + Math.random() * 16,
+      drip: 3 + Math.random() * 4
+    };
+    this.zone = null;
   }
 
   stopAmbient() {
@@ -131,7 +142,94 @@ export class AudioSystem {
     this.ambientOn = false;
     try { this.humOsc.forEach(o => o.stop()); } catch (e) {}
     try { this.airSrc.stop(); } catch (e) {}
+    try { this.droneNodes.forEach(o => o.stop()); } catch (e) {}
+    if (this.heart) this.heart.intensity = 0;
+    this.ambientTimers = null;
     this.stopHunt();
+  }
+
+  // Drone grave continuo (quita el "aire muerto", inquieta de fondo)
+  startDrone() {
+    const t = this.ctx.currentTime;
+    const g = this.ctx.createGain(); g.gain.value = 0.05; g.connect(this.master);
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 150;
+    const o1 = this.ctx.createOscillator(); o1.type = 'sine'; o1.frequency.value = 38;
+    const o2 = this.ctx.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = 55;
+    const o2g = this.ctx.createGain(); o2g.gain.value = 0.3; o2.connect(o2g); o2g.connect(lp);
+    o1.connect(lp); lp.connect(g);
+    // LFO lento que hace "respirar" al drone
+    const lfo = this.ctx.createOscillator(); lfo.frequency.value = 0.05;
+    const lfoG = this.ctx.createGain(); lfoG.gain.value = 0.02; lfo.connect(lfoG); lfoG.connect(g.gain);
+    [o1, o2, lfo].forEach(o => o.start(t));
+    this.droneNodes = [o1, o2, lfo];
+    this.droneGain = g;
+  }
+
+  // Latido: nodo persistente; setHeartbeat controla intensidad (0..1)
+  startHeartbeat() {
+    this.heart = { phase: 1, intensity: 0 };
+  }
+  setHeartbeat(v) { if (this.heart) this.heart.intensity = Math.min(1, v); }
+  setZone(zone) { this.zone = zone; }
+
+  beat(amp) {
+    const t = this.ctx.currentTime;
+    for (const [off, a] of [[0, 1], [0.17, 0.7]]) {
+      const o = this.ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(72, t + off);
+      o.frequency.exponentialRampToValueAtTime(40, t + off + 0.12);
+      const g = this.ctx.createGain(); o.connect(g); g.connect(this.master);
+      const vol = 0.13 * amp * a;
+      g.gain.setValueAtTime(0.0001, t + off);
+      g.gain.exponentialRampToValueAtTime(vol, t + off + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + off + 0.18);
+      o.start(t + off); o.stop(t + off + 0.26);
+    }
+  }
+
+  // Crujido estructural (metal/concreto que se queja)
+  playGroan() {
+    if (!this.ready) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(55 + Math.random() * 30, t);
+    o.frequency.exponentialRampToValueAtTime(28, t + 2.5);
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 220;
+    const g = this.ctx.createGain(); o.connect(lp); lp.connect(g); g.connect(this.reverb); g.connect(this.master);
+    this.env(g, t, 0.06, 0.6, 0.6, 1.2, 1.0);
+    o.start(t); o.stop(t + 3.6);
+  }
+
+  // Golpe lejano profundo + escombros
+  playDistantBoom() {
+    if (!this.ready) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(80, t); o.frequency.exponentialRampToValueAtTime(28, t + 0.6);
+    const g = this.ctx.createGain(); o.connect(g); g.connect(this.reverb); g.connect(this.master);
+    this.env(g, t, 0.16, 0.005, 0.3, 0.0, 0.6);
+    o.start(t); o.stop(t + 1.2);
+    const s = this.ctx.createBufferSource(); s.buffer = this.noiseBuffer;
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500;
+    const g2 = this.ctx.createGain(); s.connect(lp); lp.connect(g2); g2.connect(this.reverb);
+    this.env(g2, t, 0.05, 0.01, 0.4, 0.0, 0.5);
+    s.start(t); s.stop(t + 1);
+  }
+
+  // Grito agudo para los SCREAMERS (encima del jumpscare)
+  playScream() {
+    if (!this.ready) return;
+    this.playJumpscare();
+    const t = this.ctx.currentTime;
+    const g = this.ctx.createGain(); g.connect(this.master);
+    this.env(g, t, 0.55, 0.005, 0.2, 0.15, 0.4);
+    const o1 = this.ctx.createOscillator(); o1.type = 'sawtooth';
+    o1.frequency.setValueAtTime(900, t); o1.frequency.exponentialRampToValueAtTime(200, t + 0.7);
+    const o2 = this.ctx.createOscillator(); o2.type = 'sawtooth';
+    o2.frequency.setValueAtTime(1300, t); o2.frequency.exponentialRampToValueAtTime(260, t + 0.7);
+    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1500; bp.Q.value = 0.7;
+    o1.connect(bp); o2.connect(bp); bp.connect(g);
+    o1.start(t); o2.start(t); o1.stop(t + 0.9); o2.stop(t + 0.9);
   }
 
   // ============================================================
@@ -430,6 +528,23 @@ export class AudioSystem {
       }
     }
 
-    // Tinnitus/pitido sutil con cordura baja se gestiona desde Game (whispers).
+    // Latido cardiaco: la frecuencia y el volumen suben con la intensidad
+    if (this.heart && this.heart.intensity > 0.02) {
+      const rate = 0.8 + this.heart.intensity * 1.7; // latidos/seg
+      this.heart.phase += dt * rate;
+      if (this.heart.phase >= 1) { this.heart.phase -= 1; this.beat(this.heart.intensity); }
+    }
+
+    // Eventos ambientales programados (rellenan los silencios incomodos)
+    if (this.ambientOn && this.ambientTimers) {
+      const T = this.ambientTimers;
+      T.groan -= dt; if (T.groan <= 0) { T.groan = 10 + Math.random() * 16; this.playGroan(); }
+      T.boom -= dt; if (T.boom <= 0) { T.boom = 16 + Math.random() * 18; this.playDistantBoom(); }
+      T.voice -= dt; if (T.voice <= 0) { T.voice = 20 + Math.random() * 22; if (Math.random() < 0.6) this.playWhisper(); }
+      T.drip -= dt; if (T.drip <= 0) {
+        T.drip = (this.zone === 'flooded' ? 1.4 : 5) + Math.random() * 4;
+        if (this.zone === 'flooded' || Math.random() < 0.5) this.playWaterDrip();
+      }
+    }
   }
 }
