@@ -249,14 +249,33 @@ export class MapGenerator {
   // MATERIALES
   // ------------------------------------------------------------
   makeMaterials() {
+    const t = this.tex;
     const m = {};
-    m.wallpaper = new THREE.MeshStandardMaterial({ map: this.tex.wallpaper, roughness: 0.96, metalness: 0.0 });
-    m.carpet = new THREE.MeshStandardMaterial({ map: this.tex.carpet, roughness: 0.98, metalness: 0.0 });
-    m.ceiling = new THREE.MeshStandardMaterial({ map: this.tex.ceiling, roughness: 0.9, metalness: 0.0 });
-    m.concrete = new THREE.MeshStandardMaterial({ map: this.tex.concrete, roughness: 0.95, metalness: 0.05 });
-    // Piso inundado: mas oscuro y "mojado" (baja rugosidad => brillos de linterna)
-    m.flooded = new THREE.MeshStandardMaterial({ map: this.tex.carpet, color: 0x394048, roughness: 0.25, metalness: 0.1 });
-    m.corruptWall = new THREE.MeshStandardMaterial({ map: this.tex.wallpaper, color: 0x6b5e44, roughness: 0.97 });
+    m.wallpaper = new THREE.MeshStandardMaterial({
+      map: t.wallpaper, normalMap: t.wallpaperN, normalScale: new THREE.Vector2(0.7, 0.7),
+      roughness: 0.95, metalness: 0.0
+    });
+    m.carpet = new THREE.MeshStandardMaterial({
+      map: t.carpet, normalMap: t.carpetN, normalScale: new THREE.Vector2(0.5, 0.5),
+      roughness: 0.98, metalness: 0.0
+    });
+    m.ceiling = new THREE.MeshStandardMaterial({
+      map: t.ceiling, normalMap: t.ceilingN, normalScale: new THREE.Vector2(0.4, 0.4),
+      roughness: 0.9, metalness: 0.0
+    });
+    m.concrete = new THREE.MeshStandardMaterial({
+      map: t.concrete, normalMap: t.concreteN, normalScale: new THREE.Vector2(0.8, 0.8),
+      roughness: 0.95, metalness: 0.06
+    });
+    // Piso inundado: oscuro y "mojado" (baja rugosidad => brillos de linterna)
+    m.flooded = new THREE.MeshStandardMaterial({
+      map: t.carpet, normalMap: t.carpetN, normalScale: new THREE.Vector2(0.3, 0.3),
+      color: 0x3a444c, roughness: 0.22, metalness: 0.15
+    });
+    m.corruptWall = new THREE.MeshStandardMaterial({
+      map: t.wallpaper, normalMap: t.wallpaperN, normalScale: new THREE.Vector2(0.7, 0.7),
+      color: 0x6b5e44, roughness: 0.97
+    });
     return m;
   }
 
@@ -288,28 +307,28 @@ export class MapGenerator {
       buckets.get(mat).push(geo);
     };
 
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
     for (let x = 0; x < this.gridW; x++) {
       for (let z = 0; z < this.gridH; z++) {
+        if (this.solid[x][z]) continue; // los muros se construyen desde el lado del piso
         const w = this.gridToWorld(x, z);
         const zone = this.zoneOfGrid(x, z);
-        if (this.solid[x][z]) {
-          // Muro: solo si es visible (linda con piso)
-          if (this.hasFloorNeighbor(x, z)) {
-            const g = new THREE.BoxGeometry(T, WALL_H, T);
-            g.translate(w.x, WALL_H / 2, w.z);
-            push(this.zoneWallMat(zone, mats), g);
+
+        // Piso
+        const f = new THREE.PlaneGeometry(T, T);
+        f.rotateX(-Math.PI / 2); f.translate(w.x, 0, w.z);
+        push(this.zoneFloorMat(zone, mats), f);
+        // Techo
+        const c = new THREE.PlaneGeometry(T, T);
+        c.rotateX(Math.PI / 2); c.translate(w.x, CEIL_H, w.z);
+        push(this.zoneCeilMat(zone, mats), c);
+
+        // Muros: una cara plana por cada vecino solido (sin solapes ni z-fighting)
+        for (const [dx, dz] of dirs) {
+          const nx = x + dx, nz = z + dz;
+          if (nx < 0 || nz < 0 || nx >= this.gridW || nz >= this.gridH || this.solid[nx][nz]) {
+            push(this.zoneWallMat(zone, mats), this.makeWallFace(w.x, w.z, dx, dz));
           }
-        } else {
-          // Piso
-          const f = new THREE.PlaneGeometry(T, T);
-          f.rotateX(-Math.PI / 2);
-          f.translate(w.x, 0, w.z);
-          push(this.zoneFloorMat(zone, mats), f);
-          // Techo
-          const c = new THREE.PlaneGeometry(T, T);
-          c.rotateX(Math.PI / 2);
-          c.translate(w.x, CEIL_H, w.z);
-          push(this.zoneCeilMat(zone, mats), c);
         }
       }
     }
@@ -324,13 +343,18 @@ export class MapGenerator {
     }
   }
 
-  hasFloorNeighbor(x, z) {
-    const n = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    for (const [dx, dz] of n) {
-      const nx = x + dx, nz = z + dz;
-      if (nx >= 0 && nz >= 0 && nx < this.gridW && nz < this.gridH && !this.solid[nx][nz]) return true;
-    }
-    return false;
+  // Cara de muro orientada hacia la celda de piso, con UV repetido (mejor detalle)
+  makeWallFace(wx, wz, dx, dz) {
+    const repeatU = T / 2; // el papel se repite cada 2m a lo ancho
+    const g = new THREE.PlaneGeometry(T, WALL_H);
+    const uv = g.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * repeatU);
+    uv.needsUpdate = true;
+    if (dx === 1) { g.rotateY(-Math.PI / 2); g.translate(wx + T / 2, WALL_H / 2, wz); }
+    else if (dx === -1) { g.rotateY(Math.PI / 2); g.translate(wx - T / 2, WALL_H / 2, wz); }
+    else if (dz === 1) { g.rotateY(Math.PI); g.translate(wx, WALL_H / 2, wz + T / 2); }
+    else { g.translate(wx, WALL_H / 2, wz - T / 2); }
+    return g;
   }
 
   // ------------------------------------------------------------
@@ -437,7 +461,9 @@ export class MapGenerator {
         if (!cell) continue;
         const w = this.gridToWorld(cell[0], cell[1]);
         const obj = builder();
-        obj.position.set(w.x + (this.rng() - 0.5) * (T * 0.4), 0, w.z + (this.rng() - 0.5) * (T * 0.4));
+        // conserva la altura propia del prop (no la pisamos -> nada flotante/hundido)
+        obj.position.x = w.x + (this.rng() - 0.5) * (T * 0.4);
+        obj.position.z = w.z + (this.rng() - 0.5) * (T * 0.4);
         obj.rotation.y = this.rng() * Math.PI * 2;
         if (scaleJitter) {
           const s = 0.92 + this.rng() * 0.16;
@@ -496,26 +522,31 @@ export class MapGenerator {
   }
 
   makePipe() {
+    // tuberia apoyada en el suelo (horizontal), no flotando
     const mat = new THREE.MeshStandardMaterial({ color: 0x4a4640, roughness: 0.6, metalness: 0.5 });
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 2.6, 8), mat);
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 2.6, 10), mat);
     m.rotation.z = Math.PI / 2;
-    m.position.y = 0.3 + this.rng() * 2.2;
-    m.castShadow = true;
+    m.position.y = 0.13;
+    m.castShadow = true; m.receiveShadow = true;
     return m;
   }
 
   makeTV() {
     const g = new THREE.Group();
     const body = new THREE.MeshStandardMaterial({ color: 0x1c1a17, roughness: 0.8 });
+    // mueble/soporte apoyado en el suelo
+    const stand = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.45, 0.45),
+      new THREE.MeshStandardMaterial({ color: 0x241f18, roughness: 0.9 }));
+    stand.position.y = 0.225; stand.castShadow = true; stand.receiveShadow = true; g.add(stand);
+    // carcasa del televisor sobre el mueble
     const shell = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.6, 0.6), body);
-    shell.position.y = 0.5; shell.castShadow = true; g.add(shell);
-    // pantalla con estatica (emisiva, apagada al inicio)
+    shell.position.y = 0.75; shell.castShadow = true; g.add(shell);
     const screenTex = staticTexture(128);
     const screenMat = new THREE.MeshStandardMaterial({
       map: screenTex, emissive: 0x9fb7c8, emissiveMap: screenTex, emissiveIntensity: 0.0, color: 0x000000
     });
     const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.42), screenMat);
-    screen.position.set(0, 0.52, 0.31);
+    screen.position.set(0, 0.77, 0.31);
     g.add(screen);
     g.userData.tv = { screenMat, screenTex, on: false };
     this.tvs.push(g.userData.tv);

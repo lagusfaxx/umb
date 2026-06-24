@@ -281,22 +281,42 @@ export class UI {
     this.el.fade.classList.toggle('on', on);
   }
 
-  // ---- Screamer: cara a pantalla completa con sacudida ----
-  buildScreamerFace() {
-    const c = this.el.screamerCanvas;
-    drawFace(c.getContext('2d'), c.width, 0.7);
+  // ---- Screamer: cara found-footage que parpadea entre rostro/estatica ----
+  _drawStatic(ctx, size) {
+    const s = 64, bs = size / s;
+    for (let y = 0; y < s; y++) {
+      for (let x = 0; x < s; x++) {
+        const v = (Math.random() * 255) | 0;
+        ctx.fillStyle = `rgb(${v},${v},${v})`;
+        ctx.fillRect(x * bs, y * bs, bs + 1, bs + 1);
+      }
+    }
   }
 
-  showScreamer(ms = 600) {
-    this.buildScreamerFace();
+  showScreamer(ms = 700) {
+    const c = this.el.screamerCanvas;
+    const ctx = c.getContext('2d');
     const el = this.el.screamer;
     el.classList.remove('hidden');
-    // reinicia la animacion de sacudida
-    el.style.animation = 'none';
-    void el.offsetWidth;
-    el.style.animation = '';
+    el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+
+    drawFace(ctx, c.width);
+    clearInterval(this._screamerAnim);
+    this._screamerAnim = setInterval(() => {
+      if (Math.random() < 0.22) this._drawStatic(ctx, c.width);
+      else drawFace(ctx, c.width); // se redibuja => grano/sangre cambian (la cara "se retuerce")
+      if (Math.random() < 0.14) {
+        ctx.globalCompositeOperation = 'difference';
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.width);
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    }, 70);
+
     clearTimeout(this._screamerTimer);
-    this._screamerTimer = setTimeout(() => el.classList.add('hidden'), ms);
+    this._screamerTimer = setTimeout(() => {
+      clearInterval(this._screamerAnim);
+      el.classList.add('hidden');
+    }, ms);
   }
 
   // ---- Escondite (overlay con rendijas) ----

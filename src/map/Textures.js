@@ -257,100 +257,130 @@ export function staticTexture(size = 256) {
   return tex;
 }
 
-/* ---- ROSTRO procedural para criaturas ----
-   Cara palida y demacrada: ojos negros hundidos, boca larga oscura.
-   gore: nivel de sangre/deterioro (0..1). Devuelve {canvas, texture}. */
-export function drawFace(ctx, size, gore = 0) {
+/* ---- ROSTRO del screamer (found-footage: cara que emerge de la negrura) ----
+   Claroscuro duro, boca gritando, sangre, grano pesado. Se redibuja cada
+   frame del screamer para que "viva" y parpadee. */
+export function drawFace(ctx, size) {
   const cx = size / 2;
-  ctx.clearRect(0, 0, size, size);
-
-  // fondo negro (alrededor de la cabeza)
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, size, size);
 
-  // piel: ovalo palido grisaceo
-  const skin = ctx.createRadialGradient(cx, size * 0.45, size * 0.12, cx, size * 0.5, size * 0.5);
-  skin.addColorStop(0, '#b9b4a4');
-  skin.addColorStop(0.7, '#8c8576');
-  skin.addColorStop(1, '#3a372f');
-  ctx.fillStyle = skin;
-  ctx.beginPath();
-  ctx.ellipse(cx, size * 0.5, size * 0.30, size * 0.42, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // volumen base de la cabeza (gris muy apagado que se funde en negro)
+  let g = ctx.createRadialGradient(cx, size * 0.46, size * 0.04, cx, size * 0.5, size * 0.55);
+  g.addColorStop(0, '#574e45');
+  g.addColorStop(0.5, '#241f1b');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.ellipse(cx, size * 0.5, size * 0.31, size * 0.46, 0, 0, Math.PI * 2); ctx.fill();
 
-  // sombras de mejillas hundidas
-  ctx.fillStyle = 'rgba(20,18,14,0.5)';
-  ctx.beginPath(); ctx.ellipse(cx - size * 0.17, size * 0.6, size * 0.07, size * 0.16, 0.3, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(cx + size * 0.17, size * 0.6, size * 0.07, size * 0.16, -0.3, 0, Math.PI * 2); ctx.fill();
+  // luces altas (frente, pomulos, nariz) -> sensacion de piel iluminada de golpe
+  const hi = (x, y, rx, ry, a) => {
+    const gg = ctx.createRadialGradient(x, y, 1, x, y, Math.max(rx, ry));
+    gg.addColorStop(0, `rgba(206,198,184,${a})`);
+    gg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gg;
+    ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+  };
+  hi(cx + (Math.random() - 0.5) * 4, size * 0.30, size * 0.17, size * 0.10, 0.5);
+  hi(cx - size * 0.17, size * 0.51, size * 0.09, size * 0.14, 0.4);
+  hi(cx + size * 0.17, size * 0.51, size * 0.09, size * 0.14, 0.4);
+  hi(cx, size * 0.52, size * 0.035, size * 0.15, 0.5);
 
-  // cuencas oculares negras y profundas
+  // cuencas oculares: agujeros negros profundos con un destello humedo
   for (const sx of [-1, 1]) {
-    const ex = cx + sx * size * 0.135;
-    const ey = size * 0.42;
-    const sock = ctx.createRadialGradient(ex, ey, 2, ex, ey, size * 0.11);
-    sock.addColorStop(0, '#000');
-    sock.addColorStop(0.7, '#000');
-    sock.addColorStop(1, 'rgba(10,8,6,0)');
-    ctx.fillStyle = sock;
-    ctx.beginPath(); ctx.ellipse(ex, ey, size * 0.085, size * 0.11, 0, 0, Math.PI * 2); ctx.fill();
-    // punto de "ojo" tenue
-    ctx.fillStyle = 'rgba(150,40,30,0.5)';
-    ctx.beginPath(); ctx.arc(ex, ey + size * 0.01, size * 0.012, 0, Math.PI * 2); ctx.fill();
+    const ex = cx + sx * size * 0.145, ey = size * 0.44;
+    const gg = ctx.createRadialGradient(ex, ey, 1, ex, ey, size * 0.13);
+    gg.addColorStop(0, '#000'); gg.addColorStop(0.72, '#000'); gg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gg;
+    ctx.beginPath(); ctx.ellipse(ex, ey, size * 0.095, size * 0.125, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(220,212,205,0.55)';
+    ctx.beginPath(); ctx.arc(ex + sx * size * 0.02, ey - size * 0.012, size * 0.008, 0, Math.PI * 2); ctx.fill();
   }
+  // ceja/sombra superior
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(cx - size * 0.25, size * 0.355, size * 0.5, size * 0.028);
 
-  // nariz: sombra fina
-  ctx.fillStyle = 'rgba(20,18,14,0.45)';
-  ctx.beginPath();
-  ctx.moveTo(cx, size * 0.46);
-  ctx.lineTo(cx - size * 0.03, size * 0.6);
-  ctx.lineTo(cx + size * 0.03, size * 0.6);
-  ctx.closePath(); ctx.fill();
+  // boca gritando: hueco grande e irregular
+  ctx.fillStyle = '#070504';
+  ctx.beginPath(); ctx.ellipse(cx, size * 0.75, size * 0.115, size * 0.17, 0, 0, Math.PI * 2); ctx.fill();
+  const mg = ctx.createRadialGradient(cx, size * 0.79, 1, cx, size * 0.79, size * 0.13);
+  mg.addColorStop(0, '#000'); mg.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = mg;
+  ctx.beginPath(); ctx.ellipse(cx, size * 0.79, size * 0.095, size * 0.14, 0, 0, Math.PI * 2); ctx.fill();
+  // dientes sugeridos (irregulares)
+  ctx.fillStyle = 'rgba(150,140,120,0.32)';
+  for (let i = -2; i <= 2; i++) ctx.fillRect(cx + i * size * 0.036, size * 0.66, size * 0.02, size * 0.04 * (0.6 + Math.random() * 0.8));
 
-  // boca larga y oscura, ligeramente abierta
-  ctx.fillStyle = '#0a0806';
-  ctx.beginPath();
-  ctx.ellipse(cx, size * 0.74, size * 0.10, size * 0.06 + gore * size * 0.05, 0, 0, Math.PI * 2);
-  ctx.fill();
-  // dientes tenues
-  ctx.fillStyle = 'rgba(180,170,150,0.5)';
-  for (let i = -3; i <= 3; i++) {
-    ctx.fillRect(cx + i * size * 0.025, size * 0.71, size * 0.014, size * 0.03);
+  // sangre
+  for (let i = 0; i < 6; i++) {
+    const x = cx + (Math.random() - 0.5) * size * 0.5;
+    streak(ctx, x, size * (0.3 + Math.random() * 0.25), size * (0.15 + Math.random() * 0.35), 3 + Math.random() * 5, 'rgba(60,4,4,0.6)');
   }
-
-  // gore: escurrimientos rojos
-  if (gore > 0) {
-    ctx.fillStyle = `rgba(80,8,6,${0.4 + gore * 0.4})`;
-    for (let i = 0; i < 5 + gore * 8; i++) {
-      const x = cx + (Math.random() - 0.5) * size * 0.4;
-      streak(ctx, x, size * (0.4 + Math.random() * 0.2), size * (0.1 + Math.random() * 0.3), 3 + Math.random() * 5, `rgba(70,6,5,${0.5})`);
-    }
-  }
-
-  // venas/manchas en la piel
-  ctx.strokeStyle = 'rgba(40,30,40,0.3)';
-  ctx.lineWidth = 1;
-  for (let i = 0; i < 16; i++) {
+  // venas/grietas en la piel
+  ctx.strokeStyle = 'rgba(28,18,22,0.4)'; ctx.lineWidth = 1;
+  for (let i = 0; i < 22; i++) {
     ctx.beginPath();
-    let x = cx + (Math.random() - 0.5) * size * 0.4, y = size * (0.3 + Math.random() * 0.4);
+    let x = cx + (Math.random() - 0.5) * size * 0.5, y = size * (0.25 + Math.random() * 0.5);
     ctx.moveTo(x, y);
-    for (let s = 0; s < 4; s++) { x += (Math.random() - 0.5) * 20; y += (Math.random() - 0.5) * 20; ctx.lineTo(x, y); }
+    for (let s = 0; s < 5; s++) { x += (Math.random() - 0.5) * 22; y += (Math.random() - 0.5) * 22; ctx.lineTo(x, y); }
     ctx.stroke();
   }
 
-  // grano
-  addGrain(ctx, size, 30);
+  // tinte rojizo + scanlines + vineta dura
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = 'rgba(45,0,0,0.10)'; ctx.fillRect(0, 0, size, size);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  for (let y = 0; y < size; y += 3) ctx.fillRect(0, y, size, 1);
+  const vg = ctx.createRadialGradient(cx, size * 0.5, size * 0.18, cx, size * 0.5, size * 0.62);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.96)');
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, size, size);
+
+  addGrain(ctx, size, 64);
 }
 
-export function faceTexture(gore = 0) {
+export function faceTexture() {
   const size = 256;
   const { canvas, ctx } = makeCanvas(size);
-  drawFace(ctx, size, gore);
+  drawFace(ctx, size);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
-// Cache de texturas compartidas
+// ---- Normal map a partir de la luminancia de un canvas (relieve para la linterna) ----
+function normalFromCanvas(srcCanvas, strength = 2.2) {
+  const size = srcCanvas.width;
+  const data = srcCanvas.getContext('2d').getImageData(0, 0, size, size).data;
+  const lum = new Float32Array(size * size);
+  for (let i = 0; i < size * size; i++) {
+    lum[i] = (data[i * 4] * 0.299 + data[i * 4 + 1] * 0.587 + data[i * 4 + 2] * 0.114) / 255;
+  }
+  const at = (x, y) => lum[((y + size) % size) * size + ((x + size) % size)];
+  const { canvas, ctx } = makeCanvas(size);
+  const out = ctx.createImageData(size, size);
+  const d = out.data;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = (at(x + 1, y) - at(x - 1, y)) * strength;
+      const dy = (at(x, y + 1) - at(x, y - 1)) * strength;
+      let nx = -dx, ny = -dy, nz = 1;
+      const l = Math.hypot(nx, ny, nz) || 1;
+      const i = (y * size + x) * 4;
+      d[i] = (nx / l * 0.5 + 0.5) * 255;
+      d[i + 1] = (ny / l * 0.5 + 0.5) * 255;
+      d[i + 2] = (nz / l * 0.5 + 0.5) * 255;
+      d[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(out, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas); // normal map: dejar en espacio lineal
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+// Cache de texturas compartidas (color + relieve)
 const cache = {};
 export function getSharedTextures() {
   if (!cache.ready) {
@@ -358,8 +388,12 @@ export function getSharedTextures() {
     cache.carpet = carpetTexture(22);
     cache.ceiling = ceilingTexture(33);
     cache.concrete = concreteTexture(44);
-    cache.face = faceTexture(0.15);
+    cache.wallpaperN = normalFromCanvas(cache.wallpaper.image, 2.6);
+    cache.carpetN = normalFromCanvas(cache.carpet.image, 1.8);
+    cache.concreteN = normalFromCanvas(cache.concrete.image, 2.4);
+    cache.ceilingN = normalFromCanvas(cache.ceiling.image, 1.6);
     cache.ready = true;
   }
   return cache;
 }
+

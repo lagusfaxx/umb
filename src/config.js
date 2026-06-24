@@ -41,10 +41,10 @@ export const CONFIG = {
     drainPerSecond: 1.7,     // consumo con linterna encendida
     batteryPerPickup: 45,    // recarga por pila recogida
     lowThreshold: 22,        // por debajo: parpadeo
-    intensity: 20,           // candelas (sistema de luces fisico de three)
-    distance: 20,
-    angle: 0.46,             // radianes (semiangulo del cono)
-    penumbra: 0.55
+    intensity: 26,           // candelas (sistema de luces fisico de three)
+    distance: 24,
+    angle: 0.5,              // radianes (semiangulo del cono)
+    penumbra: 0.6
   },
 
   // ---- Cordura (atmosferica, NO letal: solo afecta visuales/audio) ----

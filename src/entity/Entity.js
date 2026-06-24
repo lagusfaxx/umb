@@ -12,7 +12,6 @@
 
 import * as THREE from 'three';
 import { CONFIG, ENTITY_STATE } from '../config.js';
-import { getSharedTextures } from '../map/Textures.js';
 
 export class Entity {
   constructor(scene, map, audio, opts = {}) {
@@ -52,55 +51,61 @@ export class Entity {
   // ============================================================
   buildMesh() { return this.variant === 'crawler' ? this.buildCrawler() : this.buildStalker(); }
 
-  bodyMat() { return new THREE.MeshStandardMaterial({ color: 0x040406, roughness: 0.55, metalness: 0.0 }); }
+  // Material oscuro, algo humedo: la linterna le saca un borde brillante (silueta)
+  bodyMat() { return new THREE.MeshStandardMaterial({ color: 0x0a0a0d, roughness: 0.32, metalness: 0.12 }); }
 
-  makeFace(w = 0.42, h = 0.52) {
-    const tex = getSharedTextures().face;
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x0a0a0a, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.55, roughness: 1.0
-    });
-    this.faceMat = mat;
-    return new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  // Dos ojos hundidos con brillo tenue (sin cara dibujada -> nada "cartoon")
+  addEyes(headGroup, spread, fwd, up) {
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x05060a, emissive: 0x9fb8c0, emissiveIntensity: 1.4 });
+    for (const sx of [-1, 1]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 8), eyeMat);
+      eye.position.set(sx * spread, up, fwd);
+      headGroup.add(eye);
+    }
   }
 
+  // ---- Acechador: altisimo, delgado, encorvado, brazos hasta las rodillas ----
   buildStalker() {
     const g = new THREE.Group();
     const dark = this.bodyMat();
 
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 1.15, 4, 10), dark);
-    torso.position.y = 1.55; torso.rotation.x = 0.12; g.add(torso);
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.21, 1.35, 6, 16), dark);
+    torso.position.set(0, 1.72, 0.03); torso.rotation.x = 0.16; g.add(torso);
+    const shoulders = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.34, 5, 10), dark);
+    shoulders.rotation.z = Math.PI / 2; shoulders.position.set(0, 2.28, 0.0); g.add(shoulders);
 
-    const headGroup = new THREE.Group();
-    headGroup.position.set(0, 2.35, 0.04);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 12), dark);
-    head.scale.set(0.92, 1.15, 0.95); headGroup.add(head);
-    const face = this.makeFace(0.34, 0.46); face.position.set(0, 0, 0.18); headGroup.add(face);
+    const neck = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.16, 4, 8), dark);
+    neck.position.set(0, 2.45, 0.06); g.add(neck);
+    const headGroup = new THREE.Group(); headGroup.position.set(0, 2.62, 0.07);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 20, 16), dark);
+    head.scale.set(0.82, 1.28, 0.92); head.rotation.x = 0.2; headGroup.add(head);
+    this.addEyes(headGroup, 0.06, 0.12, 0.02);
     g.add(headGroup); this.head = headGroup;
 
-    const armGeo = new THREE.CapsuleGeometry(0.07, 1.5, 3, 6);
-    const armL = new THREE.Mesh(armGeo, dark); armL.position.set(-0.32, 1.25, 0); armL.rotation.z = 0.1; g.add(armL);
-    const armR = new THREE.Mesh(armGeo, dark); armR.position.set(0.32, 1.25, 0); armR.rotation.z = -0.1; g.add(armR);
-    const legGeo = new THREE.CapsuleGeometry(0.1, 1.0, 3, 6);
-    const legL = new THREE.Mesh(legGeo, dark); legL.position.set(-0.13, 0.6, 0); g.add(legL);
-    const legR = new THREE.Mesh(legGeo, dark); legR.position.set(0.13, 0.6, 0); g.add(legR);
+    const armGeo = new THREE.CapsuleGeometry(0.06, 1.55, 5, 12);
+    const armL = new THREE.Mesh(armGeo, dark); armL.position.set(-0.3, 1.3, 0.02); armL.rotation.z = 0.08; g.add(armL);
+    const armR = new THREE.Mesh(armGeo, dark); armR.position.set(0.3, 1.3, 0.02); armR.rotation.z = -0.08; g.add(armR);
+    const legGeo = new THREE.CapsuleGeometry(0.085, 1.2, 5, 12);
+    const legL = new THREE.Mesh(legGeo, dark); legL.position.set(-0.12, 0.62, 0); g.add(legL);
+    const legR = new THREE.Mesh(legGeo, dark); legR.position.set(0.12, 0.62, 0); g.add(legR);
 
     g.traverse(o => { if (o.isMesh) o.castShadow = true; });
     this.limbs = { armL, armR, legL, legR };
-    this.eyeHeight = 2.0;
+    this.eyeHeight = 2.2;
     return g;
   }
 
   buildCrawler() {
     const g = new THREE.Group();
     const dark = this.bodyMat();
-    const spine = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 1.0, 4, 8), dark);
+    const spine = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 1.05, 6, 12), dark);
     spine.rotation.x = Math.PI / 2; spine.position.set(0, 0.55, 0); g.add(spine);
-    const headGroup = new THREE.Group(); headGroup.position.set(0, 0.5, 0.7);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), dark);
-    head.scale.set(1.0, 0.8, 1.1); headGroup.add(head);
-    const face = this.makeFace(0.3, 0.34); face.position.set(0, 0, 0.16); face.rotation.x = 0.3; headGroup.add(face);
+    const headGroup = new THREE.Group(); headGroup.position.set(0, 0.5, 0.72);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12), dark);
+    head.scale.set(1.0, 0.78, 1.15); headGroup.add(head);
+    this.addEyes(headGroup, 0.05, 0.15, 0.03);
     g.add(headGroup); this.head = headGroup;
-    const limbGeo = new THREE.CapsuleGeometry(0.06, 0.7, 3, 6);
+    const limbGeo = new THREE.CapsuleGeometry(0.055, 0.75, 5, 10);
     const mk = (x, z) => { const m = new THREE.Mesh(limbGeo, dark); m.position.set(x, 0.4, z); m.rotation.z = x > 0 ? -0.6 : 0.6; g.add(m); return m; };
     this.limbs = { armL: mk(-0.3, 0.5), armR: mk(0.3, 0.5), legL: mk(-0.3, -0.4), legR: mk(0.3, -0.4) };
     g.traverse(o => { if (o.isMesh) o.castShadow = true; });

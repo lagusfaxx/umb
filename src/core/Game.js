@@ -27,12 +27,12 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // Ajustes visuales por zona (ambiente, niebla, color)
 const ZONE_LOOK = {
-  [ZONE.YELLOW_HALLS]: { ambient: 0.50, fog: 0.045, color: 0x171206 },
-  [ZONE.OFFICES]:      { ambient: 0.46, fog: 0.048, color: 0x14110a },
-  [ZONE.TV_ROOM]:      { ambient: 0.40, fog: 0.050, color: 0x100f12 },
-  [ZONE.MAINTENANCE]:  { ambient: 0.13, fog: 0.075, color: 0x070707 },
-  [ZONE.FLOODED]:      { ambient: 0.22, fog: 0.055, color: 0x0a1013 },
-  [ZONE.CORRUPT]:      { ambient: 0.14, fog: 0.070, color: 0x0b0705 }
+  [ZONE.YELLOW_HALLS]: { ambient: 0.58, fog: 0.042, color: 0x171206 },
+  [ZONE.OFFICES]:      { ambient: 0.52, fog: 0.045, color: 0x14110a },
+  [ZONE.TV_ROOM]:      { ambient: 0.46, fog: 0.048, color: 0x100f12 },
+  [ZONE.MAINTENANCE]:  { ambient: 0.26, fog: 0.062, color: 0x090909 },
+  [ZONE.FLOODED]:      { ambient: 0.30, fog: 0.050, color: 0x0a1013 },
+  [ZONE.CORRUPT]:      { ambient: 0.26, fog: 0.058, color: 0x0b0705 }
 };
 
 export class Game {
@@ -83,7 +83,7 @@ export class Game {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 1.2;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
   }
 
@@ -99,8 +99,13 @@ export class Game {
     // luz ambiente + hemisferica (base; el look plano lo dan los paneles emisivos)
     this.ambient = new THREE.AmbientLight(0xffe9c4, 0.45);
     this.scene.add(this.ambient);
-    this.hemi = new THREE.HemisphereLight(0xfff0d0, 0x0a0905, 0.3);
+    this.hemi = new THREE.HemisphereLight(0xfff0d0, 0x0a0905, 0.42);
     this.scene.add(this.hemi);
+
+    // luz de relleno tenue que sigue al jugador (adaptacion del ojo: nunca
+    // ciego del todo, sin perder la atmosfera). Sin sombras por rendimiento.
+    this.fillLight = new THREE.PointLight(0xbfc4d0, 1.6, 9, 2);
+    this.scene.add(this.fillLight);
 
     // pool de luces puntuales que siguen a las luminarias cercanas al jugador
     this.lightPool = [];
@@ -532,6 +537,9 @@ export class Game {
     this._feet.set(this.player.position.x, 0, this.player.position.z);
     const g = this.map.worldToGrid(this.player.position.x, this.player.position.z);
     this.currentZone = this.map.zoneOfGrid(g.gx, g.gz);
+
+    // la luz de relleno acompaña al jugador
+    this.fillLight.position.set(this.player.position.x, this.player.eyeHeight, this.player.position.z);
 
     // iluminacion (calcula tambien nearestLitDist)
     this.updateLighting(dt);

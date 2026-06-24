@@ -93,9 +93,11 @@ El `dist/` generado por `npm run build` es estático y se puede:
   VHS, la distorsión y los susurros. **NO es letal** (es atmosférica): solo el
   acechador puede matarte, para que ninguna muerte se sienta "de la nada".
 - **El Acechador** — la amenaza principal, **siempre presente y visible**.
-  Figura altísima y demacrada con **rostro pálido** que flota en la oscuridad y
-  tics de cabeza. IA con **vista** (cono + alcance; te ve más lejos si llevas la
-  linterna encendida) y **oído** (si corres), con 3 estados claros:
+  **Silueta oscura, altísima y demacrada, sin rostro dibujado** (solo dos ojos
+  hundidos que brillan tenues): la linterna le saca un borde húmedo y se lee como
+  una sombra recortada, no como un muñeco. Encorvado, con tics de cabeza. IA con
+  **vista** (cono + alcance; te ve más lejos si llevas la linterna encendida) y
+  **oído** (si corres), con 3 estados claros:
   - **PATRULLA**: ronda el nivel con calma (lo verás cruzar pasillos a lo lejos).
   - **SOSPECHA**: oyó/medio te vio → va a investigar tu último punto conocido.
   - **CAZA**: te detectó → te persigue (más lento que correr, así que **puedes
@@ -123,9 +125,15 @@ El `dist/` generado por `npm run build` es estático y se puede:
   **crujidos estructurales** y **golpes lejanos**, pasos propios y ajenos,
   respiración, susurros, estática, chirridos, goteo (más en el sector inundado),
   drone de caza, **grito de screamer** y reverb por convolución.
-- **Screamers**: **cara a pantalla completa** + grito + distorsión máxima en
-  momentos con causa clara: al morir (te muestra al acechador que te atrapó) y al
-  activar el panel 3. Sin sustos aleatorios que maten de la nada.
+- **Screamers**: cara **found-footage** a pantalla completa que **parpadea entre
+  el rostro granulado, estática e inversiones** (no una imagen plana), con grito
+  + distorsión máxima. Solo en momentos con causa clara: al morir (te muestra al
+  acechador que te atrapó) y al activar el panel 3. Sin sustos aleatorios.
+- **Gráficos**: muros generados por **caras limpias** con UV repetido (sin
+  z-fighting ni patrones gigantes), **normal maps** procedurales para que la
+  linterna revele relieve, props **apoyados en el suelo** (sin objetos flotantes)
+  y zonas oscuras con una **luz de relleno** que sigue al jugador (nunca ciego
+  del todo, sin perder la atmósfera).
 - **Postprocesado VHS** (un solo shader): grano, aberración cromática,
   scanlines, distorsión de lente, viñeta, barras de tracking, flicker y color
   lavado amarillento. Reacciona a la cordura y a la caza.
@@ -205,6 +213,8 @@ umbral-09/
   detección y la caza**, y **sin verte no te persigue ni mata** (nada de muertes
   aleatorias). BFS encuentra rutas correctas.
 - ✅ Conteo de objetivos y lógica de progreso (`GameState`).
+- ✅ Construcción visual sin errores (probado en Node): texturas + **normal maps**,
+  paredes por caras, **consolas/casilleros apoyados**, y el acechador **sin cara**.
 
 Verificación jugable a comprobar en navegador (en PC): inicio, movimiento,
 cámara, recoger cintas/pilas, activar paneles, linterna, **ver al acechador

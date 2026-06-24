@@ -92,31 +92,38 @@ export class Items {
   build() {
     const S = this.map.itemSpawns;
 
-    // ---- Cintas VHS ----
+    // ---- Cintas VHS (apoyadas en el suelo, con brillo para ubicarlas) ----
     for (const tp of S.tapes) {
       const mesh = this.makeTapeMesh();
       const w = this.map.gridToWorld(tp.gx, tp.gz);
-      mesh.position.set(w.x, 1.0, w.z);
+      mesh.position.set(w.x, 0.04, w.z);
       this.group.add(mesh);
-      this.tapes.push({ id: tp.id, mesh, collected: false, baseY: 1.0 });
+      this.tapes.push({ id: tp.id, mesh, collected: false, baseY: 0.04 });
     }
 
     // ---- Pilas ----
     for (const bp of S.batteries) {
       const mesh = this.makeBatteryMesh();
       const w = this.map.gridToWorld(bp.gx, bp.gz);
-      mesh.position.set(w.x, 0.9, w.z);
+      mesh.position.set(w.x, 0.09, w.z);
       this.group.add(mesh);
-      this.batteries.push({ id: bp.id, mesh, collected: false, baseY: 0.9 });
+      this.batteries.push({ id: bp.id, mesh, collected: false, baseY: 0.09 });
     }
 
-    // ---- Paneles electricos ----
+    // ---- Paneles electricos (consolas de pie, apoyadas / contra la pared) ----
     for (const pp of S.panels) {
       const grp = this.makePanelMesh();
       const w = this.map.gridToWorld(pp.gx, pp.gz);
-      grp.position.set(w.x, 1.3, w.z);
-      // orientar hacia el centro (aprox) girando hacia el pasillo
-      grp.rotation.y = Math.atan2(-w.x, -w.z);
+      let yaw = Math.atan2(-w.x, -w.z);
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (this.map.isSolidGrid(pp.gx + dx, pp.gz + dz)) {
+          yaw = Math.atan2(-dx, -dz);      // frente hacia el cuarto
+          w.x += dx * 0.18; w.z += dz * 0.18; // pegada a la pared
+          break;
+        }
+      }
+      grp.position.set(w.x, 0, w.z);       // apoyada en el suelo (no flota)
+      grp.rotation.y = yaw;
       this.group.add(grp);
       this.panels.push({ id: pp.id, grp, indicator: grp.userData.indicator, activated: false });
     }
@@ -217,7 +224,7 @@ export class Items {
     g.add(body);
     const label = new THREE.Mesh(
       new THREE.PlaneGeometry(0.13, 0.05),
-      new THREE.MeshStandardMaterial({ color: 0xd8c98a, emissive: 0x6a5a2a, emissiveIntensity: 0.6 })
+      new THREE.MeshStandardMaterial({ color: 0xd8c98a, emissive: 0xb89a4a, emissiveIntensity: 1.0 })
     );
     label.rotation.x = -Math.PI / 2; label.position.y = 0.017;
     g.add(label);
@@ -228,7 +235,7 @@ export class Items {
   makeBatteryMesh() {
     const m = new THREE.Mesh(
       new THREE.CylinderGeometry(0.04, 0.04, 0.16, 10),
-      new THREE.MeshStandardMaterial({ color: 0x1c3a1c, roughness: 0.5, emissive: 0x123012, emissiveIntensity: 0.5 })
+      new THREE.MeshStandardMaterial({ color: 0x1c3a1c, roughness: 0.5, emissive: 0x1f5a1f, emissiveIntensity: 0.9 })
     );
     m.castShadow = true;
     return m;
@@ -236,25 +243,22 @@ export class Items {
 
   makePanelMesh() {
     const g = new THREE.Group();
-    const box = new THREE.Mesh(
-      new THREE.BoxGeometry(0.7, 0.9, 0.18),
-      new THREE.MeshStandardMaterial({ color: 0x2a2925, roughness: 0.6, metalness: 0.4 })
-    );
-    g.add(box);
+    const metal = new THREE.MeshStandardMaterial({ color: 0x2a2925, roughness: 0.6, metalness: 0.45 });
+    // gabinete de pie
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.5, 0.4), metal);
+    cab.position.y = 0.75; g.add(cab);
+    // panel frontal inclinado
+    const face = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.5, 0.08),
+      new THREE.MeshStandardMaterial({ color: 0x14171a, roughness: 0.5, metalness: 0.3 }));
+    face.position.set(0, 1.15, 0.2); face.rotation.x = -0.28; g.add(face);
     // indicador (rojo = apagado)
-    const indicator = new THREE.Mesh(
-      new THREE.CircleGeometry(0.06, 12),
-      new THREE.MeshBasicMaterial({ color: 0xff2a1a })
-    );
-    indicator.position.set(0, 0.18, 0.1);
-    g.add(indicator);
+    const indicator = new THREE.Mesh(new THREE.CircleGeometry(0.05, 14),
+      new THREE.MeshBasicMaterial({ color: 0xff2a1a }));
+    indicator.position.set(0.18, 1.22, 0.265); indicator.rotation.x = -0.28; g.add(indicator);
     // palanca
-    const lever = new THREE.Mesh(
-      new THREE.BoxGeometry(0.05, 0.22, 0.05),
-      new THREE.MeshStandardMaterial({ color: 0x555049, metalness: 0.6, roughness: 0.4 })
-    );
-    lever.position.set(0, -0.15, 0.12); lever.rotation.x = 0.5;
-    g.add(lever);
+    const lever = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.2, 0.05),
+      new THREE.MeshStandardMaterial({ color: 0x555049, metalness: 0.6, roughness: 0.4 }));
+    lever.position.set(-0.14, 1.06, 0.28); lever.rotation.x = 0.45; g.add(lever);
     g.userData.indicator = indicator;
     g.userData.lever = lever;
     g.traverse(o => { if (o.isMesh) o.castShadow = true; });
@@ -352,7 +356,7 @@ export class Items {
     }
     for (const p of this.panels) {
       if (p.activated) continue;
-      const wp = new THREE.Vector3(); p.grp.getWorldPosition(wp);
+      const wp = new THREE.Vector3(); p.grp.getWorldPosition(wp); wp.y += 1.1; // altura del panel
       consider(wp, { type: 'panel', obj: p }, `[E] Activar panel ${p.id + 1}`);
     }
     for (const n of this.notes) {
@@ -421,16 +425,14 @@ export class Items {
 
   update(dt, playerPos) {
     this.t += dt;
-    // bob + rotacion de pickups para destacarlos
+    // micro-oscilacion apenas perceptible (apoyados en el suelo, no flotan)
     for (const t of this.tapes) {
       if (t.collected) continue;
-      t.mesh.rotation.y += dt * 0.8;
-      t.mesh.position.y = t.baseY + Math.sin(this.t * 2 + t.id) * 0.04;
+      t.mesh.position.y = t.baseY + Math.sin(this.t * 1.8 + t.id) * 0.012;
     }
     for (const b of this.batteries) {
       if (b.collected) continue;
-      b.mesh.rotation.y += dt * 1.2;
-      b.mesh.position.y = b.baseY + Math.sin(this.t * 2.2 + b.id) * 0.03;
+      b.mesh.position.y = b.baseY + Math.sin(this.t * 2.0 + b.id) * 0.012;
     }
     // pulso del indicador de paneles apagados
     for (const p of this.panels) {
